@@ -3,8 +3,18 @@
  * Tracks successful tool sequences and provides recommendations
  */
 
-import { StepRecommendation, ToolRecommendation } from './types.js';
 import { logger } from './logging.js';
+
+// Scoring constants for chain matching
+const SCORING = {
+	PREFIX_MATCH_WEIGHT: 10,
+	KEYWORD_MATCH_WEIGHT: 5,
+	HIGH_SUCCESS_BONUS: 5,
+	RECENT_USE_BONUS: 3,
+	RECENT_USE_DAYS_THRESHOLD: 7,
+	HIGH_SUCCESS_RATE_THRESHOLD: 0.8,
+	CONFIDENCE_WEIGHT: 0.3, // Weight for new confidence values in rolling average
+} as const;
 
 export interface ToolChain {
 	id: string;
@@ -80,9 +90,9 @@ export class ToolChainLibrary {
 			}
 			if (confidence !== undefined) {
 				// Update rolling average
-				const weight = 0.3; // Weight for new value
 				chain.averageConfidence = 
-					chain.averageConfidence * (1 - weight) + confidence * weight;
+					chain.averageConfidence * (1 - SCORING.CONFIDENCE_WEIGHT) + 
+					confidence * SCORING.CONFIDENCE_WEIGHT;
 			}
 			chain.lastUsed = new Date().toISOString();
 			
@@ -99,6 +109,17 @@ export class ToolChainLibrary {
 
 		// Reset current chain
 		this.currentChain = [];
+	}
+
+	/**
+	 * Finalize and record the current tool chain.
+	 * Should be called when a reasoning process or thought sequence is completed.
+	 * @param success Whether the chain led to a successful outcome
+	 * @param confidence Confidence score for the chain (optional)
+	 * @param context Additional context for the chain (optional)
+	 */
+	public finalizeCurrentChain(success: boolean, confidence?: number, context?: string): void {
+		this.completeChain(success, confidence, context);
 	}
 
 	/**
@@ -137,7 +158,7 @@ export class ToolChainLibrary {
 				);
 				
 				if (matchLength > 0) {
-					matchScore += matchLength * 10;
+					matchScore += matchLength * SCORING.PREFIX_MATCH_WEIGHT;
 					reasons.push(`Matches ${matchLength} previous tools`);
 				}
 			}
@@ -150,22 +171,22 @@ export class ToolChainLibrary {
 				);
 				
 				if (matchingKeywords.length > 0) {
-					matchScore += matchingKeywords.length * 5;
+					matchScore += matchingKeywords.length * SCORING.KEYWORD_MATCH_WEIGHT;
 					reasons.push(`Context matches: ${matchingKeywords.join(', ')}`);
 				}
 			}
 
 			// Bonus for high success rate
-			if (successRate > 0.8) {
-				matchScore += 5;
+			if (successRate > SCORING.HIGH_SUCCESS_RATE_THRESHOLD) {
+				matchScore += SCORING.HIGH_SUCCESS_BONUS;
 				reasons.push('High success rate');
 			}
 
 			// Bonus for recent use
 			const daysSinceUse = (Date.now() - new Date(chain.lastUsed).getTime()) 
 				/ (1000 * 60 * 60 * 24);
-			if (daysSinceUse < 7) {
-				matchScore += 3;
+			if (daysSinceUse < SCORING.RECENT_USE_DAYS_THRESHOLD) {
+				matchScore += SCORING.RECENT_USE_BONUS;
 				reasons.push('Recently used');
 			}
 

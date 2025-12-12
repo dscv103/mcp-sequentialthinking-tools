@@ -3,6 +3,8 @@
  * Provides structured error context and retry logic
  */
 
+import { logger } from './logging.js';
+
 export interface ErrorContext {
 	operation: string;
 	timestamp: string;
@@ -118,10 +120,10 @@ export async function withRetry<T>(
 			}
 			
 			const delay = calculateDelay(attempt, retryConfig);
-			console.error(
+			logger.warn(
 				`Operation "${operationName}" failed (attempt ${attempt + 1}/${retryConfig.maxRetries + 1}), ` +
 				`retrying in ${Math.round(delay)}ms...`,
-				error instanceof Error ? error.message : String(error)
+				{ error: error instanceof Error ? error.message : String(error) }
 			);
 			
 			await sleep(delay);
@@ -152,7 +154,10 @@ export async function safeExecute<T>(
 		return { success: true, data };
 	} catch (error) {
 		const errorContext = createErrorContext(operationName, error);
-		console.error(`Operation "${operationName}" failed:`, errorContext);
+		logger.error(`Operation "${operationName}" failed`, error, {
+			operation: errorContext.operation,
+			timestamp: errorContext.timestamp,
+		});
 		
 		if (fallback !== undefined) {
 			return { success: false, error: errorContext, data: fallback };

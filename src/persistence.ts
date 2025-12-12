@@ -58,6 +58,7 @@ export class PersistenceLayer {
 				needs_more_thoughts BOOLEAN DEFAULT 0,
 				next_thought_needed BOOLEAN NOT NULL,
 				available_mcp_tools TEXT NOT NULL,
+				confidence REAL,
 				created_at TEXT NOT NULL,
 				session_id TEXT
 			)
@@ -109,49 +110,60 @@ export class PersistenceLayer {
 		if (!this.db || !this.config.enablePersistence) return null;
 
 		const result = await safeExecute(async () => {
-			const stmt = this.db!.prepare(`
-				INSERT INTO thoughts (
-					thought_number, total_thoughts, thought, is_revision, revises_thought,
-					branch_from_thought, branch_id, needs_more_thoughts, next_thought_needed,
-					available_mcp_tools, created_at, session_id
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			`);
+			// Use transaction for atomicity
+			this.db!.exec('BEGIN TRANSACTION');
+			
+			try {
+				const stmt = this.db!.prepare(`
+					INSERT INTO thoughts (
+						thought_number, total_thoughts, thought, is_revision, revises_thought,
+						branch_from_thought, branch_id, needs_more_thoughts, next_thought_needed,
+						available_mcp_tools, confidence, created_at, session_id
+					) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				`);
 
-			const info = stmt.run(
-				thought.thought_number,
-				thought.total_thoughts,
-				thought.thought,
-				thought.is_revision ? 1 : 0,
-				thought.revises_thought || null,
-				thought.branch_from_thought || null,
-				thought.branch_id || null,
-				thought.needs_more_thoughts ? 1 : 0,
-				thought.next_thought_needed ? 1 : 0,
-				JSON.stringify(thought.available_mcp_tools),
-				new Date().toISOString(),
-				sessionId || null
-			);
+				const info = stmt.run(
+					thought.thought_number,
+					thought.total_thoughts,
+					thought.thought,
+					thought.is_revision ? 1 : 0,
+					thought.revises_thought || null,
+					thought.branch_from_thought || null,
+					thought.branch_id || null,
+					thought.needs_more_thoughts ? 1 : 0,
+					thought.next_thought_needed ? 1 : 0,
+					JSON.stringify(thought.available_mcp_tools),
+					thought.confidence || null,
+					new Date().toISOString(),
+					sessionId || null
+				);
 
-			const thoughtId = Number(info.lastInsertRowid);
+				const thoughtId = Number(info.lastInsertRowid);
 
-			// Save current step if present
-			if (thought.current_step) {
-				this.saveStepRecommendation(thoughtId, thought.current_step, true);
-			}
-
-			// Save previous steps
-			if (thought.previous_steps) {
-				for (const step of thought.previous_steps) {
-					this.saveStepRecommendation(thoughtId, step, false);
+				// Save current step if present
+				if (thought.current_step) {
+					this.saveStepRecommendation(thoughtId, thought.current_step, true);
 				}
+
+				// Save previous steps
+				if (thought.previous_steps) {
+					for (const step of thought.previous_steps) {
+						this.saveStepRecommendation(thoughtId, step, false);
+					}
+				}
+
+				this.db!.exec('COMMIT');
+
+				logger.debug('Thought saved to database', { 
+					thoughtId, 
+					thoughtNumber: thought.thought_number 
+				});
+
+				return thoughtId;
+			} catch (error) {
+				this.db!.exec('ROLLBACK');
+				throw error;
 			}
-
-			logger.debug('Thought saved to database', { 
-				thoughtId, 
-				thoughtNumber: thought.thought_number 
-			});
-
-			return thoughtId;
 		}, 'saveThought');
 
 		return result.success ? result.data! : null;
@@ -164,43 +176,52 @@ export class PersistenceLayer {
 	): void {
 		if (!this.db) return;
 
-		const stmt = this.db.prepare(`
-			INSERT INTO step_recommendations (
-				thought_id, step_description, expected_outcome, next_step_conditions,
-				is_current, created_at
-			) VALUES (?, ?, ?, ?, ?, ?)
-		`);
-
-		const info = stmt.run(
-			thoughtId,
-			step.step_description,
-			step.expected_outcome,
-			step.next_step_conditions ? JSON.stringify(step.next_step_conditions) : null,
-			isCurrent ? 1 : 0,
-			new Date().toISOString()
-		);
-
-		const stepId = Number(info.lastInsertRowid);
-
-		// Save tool recommendations
-		for (const tool of step.recommended_tools) {
-			const toolStmt = this.db.prepare(`
-				INSERT INTO tool_recommendations (
-					step_id, tool_name, confidence, rationale, priority,
-					suggested_inputs, alternatives, created_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		try {
+			const stmt = this.db.prepare(`
+				INSERT INTO step_recommendations (
+					thought_id, step_description, expected_outcome, next_step_conditions,
+					is_current, created_at
+				) VALUES (?, ?, ?, ?, ?, ?)
 			`);
 
-			toolStmt.run(
-				stepId,
-				tool.tool_name,
-				tool.confidence,
-				tool.rationale,
-				tool.priority,
-				tool.suggested_inputs ? JSON.stringify(tool.suggested_inputs) : null,
-				tool.alternatives ? JSON.stringify(tool.alternatives) : null,
+			const info = stmt.run(
+				thoughtId,
+				step.step_description,
+				step.expected_outcome,
+				step.next_step_conditions ? JSON.stringify(step.next_step_conditions) : null,
+				isCurrent ? 1 : 0,
 				new Date().toISOString()
 			);
+
+			const stepId = Number(info.lastInsertRowid);
+
+			// Save tool recommendations
+			for (const tool of step.recommended_tools) {
+				const toolStmt = this.db.prepare(`
+					INSERT INTO tool_recommendations (
+						step_id, tool_name, confidence, rationale, priority,
+						suggested_inputs, alternatives, created_at
+					) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+				`);
+
+				toolStmt.run(
+					stepId,
+					tool.tool_name,
+					tool.confidence,
+					tool.rationale,
+					tool.priority,
+					tool.suggested_inputs ? JSON.stringify(tool.suggested_inputs) : null,
+					tool.alternatives ? JSON.stringify(tool.alternatives) : null,
+					new Date().toISOString()
+				);
+			}
+		} catch (error) {
+			logger.error('Failed to save step recommendation', error, {
+				thoughtId,
+				stepDescription: step.step_description,
+				isCurrent,
+			});
+			throw error;
 		}
 	}
 

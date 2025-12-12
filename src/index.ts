@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { SequentialThinkingSchema, SEQUENTIAL_THINKING_TOOL } from './schema.js';
 import { ThoughtData, ToolRecommendation, StepRecommendation, Tool } from './types.js';
 import { logger, measureTime } from './logging.js';
-import { withRetry, safeExecute, createErrorContext } from './error-handling.js';
+import { createErrorContext } from './error-handling.js';
 import { PersistenceLayer } from './persistence.js';
 import { ToolCapabilityMatcher, enrichToolsWithCapabilities } from './tool-capabilities.js';
 import { BacktrackingManager } from './backtracking.js';
@@ -172,6 +172,12 @@ class ToolAwareSequentialThinkingServer {
 		logger.warn('Tool discovery not implemented - manually add tools via addTool()');
 	}
 
+	public shutdown(): void {
+		// Close database connection
+		this.persistence.close();
+		logger.info('Server shutdown complete');
+	}
+
 	private formatRecommendation(step: StepRecommendation): string {
 		const tools = step.recommended_tools
 			.map((tool) => {
@@ -327,6 +333,13 @@ Expected Outcome: ${step.expected_outcome}${
 				if (this.enableDAG) {
 					this.thoughtDAG.addThought(validatedInput);
 					
+					// Mark this thought as executing and then completed
+					this.thoughtDAG.markExecuting(validatedInput.thought_number);
+					this.thoughtDAG.markCompleted(validatedInput.thought_number, {
+						confidence: validatedInput.confidence,
+						thoughtNumber: validatedInput.thought_number,
+					});
+					
 					// Get DAG statistics
 					const dagStats = this.thoughtDAG.getStats();
 					logger.debug('DAG updated', dagStats);
@@ -391,6 +404,20 @@ Expected Outcome: ${step.expected_outcome}${
 					dagStats = this.thoughtDAG.getStats();
 					const parallelGroups = this.thoughtDAG.getParallelGroups();
 					dagStats = { ...dagStats, parallelGroupCount: parallelGroups.length };
+				}
+
+				// Finalize tool chain if this is the last thought
+				if (this.enableToolChains && !validatedInput.next_thought_needed) {
+					const success = (validatedInput.confidence || 0.5) >= 0.5;
+					this.toolChainLibrary.finalizeCurrentChain(
+						success,
+						validatedInput.confidence,
+						validatedInput.thought
+					);
+					logger.debug('Tool chain finalized', { 
+						success, 
+						confidence: validatedInput.confidence 
+					});
 				}
 
 				return {
@@ -508,9 +535,21 @@ async function main() {
 	logger.info('Sequential Thinking MCP Server running on stdio');
 	
 	// Log metrics periodically (every 5 minutes)
-	setInterval(() => {
+	const metricsInterval = setInterval(() => {
 		logger.logMetrics();
 	}, 5 * 60 * 1000);
+
+	// Clean up resources on shutdown
+	const cleanup = () => {
+		logger.info('Shutting down server...');
+		clearInterval(metricsInterval);
+		thinkingServer.shutdown();
+		process.exit(0);
+	};
+
+	process.on('SIGINT', cleanup);
+	process.on('SIGTERM', cleanup);
+	process.on('beforeExit', cleanup);
 }
 
 main().catch((error) => {

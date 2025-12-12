@@ -297,7 +297,6 @@ export class ThoughtDAG {
 			// Process queue
 			while (queue.length > 0) {
 				const current = queue.shift()!;
-				const currentLevel = levels.get(current)!;
 
 				// Update children
 				const node = this.nodes.get(current);
