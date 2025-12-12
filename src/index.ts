@@ -13,6 +13,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SequentialThinkingSchema, SEQUENTIAL_THINKING_TOOL } from './schema.js';
 import { ThoughtData, ToolRecommendation, StepRecommendation, Tool } from './types.js';
+import { logger, measureTime } from './logging.js';
+import { withRetry, safeExecute, createErrorContext } from './error-handling.js';
+import { PersistenceLayer } from './persistence.js';
 
 // Get version from package.json
 const __filename = fileURLToPath(import.meta.url);
@@ -41,6 +44,9 @@ const server = new McpServer(
 interface ServerOptions {
 	available_tools?: Tool[];
 	maxHistorySize?: number;
+	enablePersistence?: boolean;
+	dbPath?: string;
+	sessionId?: string;
 }
 
 class ToolAwareSequentialThinkingServer {
@@ -48,6 +54,8 @@ class ToolAwareSequentialThinkingServer {
 	private branches: Record<string, ThoughtData[]> = {};
 	private available_tools: Map<string, Tool> = new Map();
 	private maxHistorySize: number;
+	private persistence: PersistenceLayer;
+	private sessionId: string;
 
 	public getAvailableTools(): Tool[] {
 		return Array.from(this.available_tools.values());
@@ -55,6 +63,19 @@ class ToolAwareSequentialThinkingServer {
 
 	constructor(options: ServerOptions = {}) {
 		this.maxHistorySize = options.maxHistorySize || 1000;
+		this.sessionId = options.sessionId || `session-${Date.now()}`;
+		
+		// Initialize persistence layer
+		this.persistence = new PersistenceLayer({
+			enablePersistence: options.enablePersistence ?? true,
+			dbPath: options.dbPath,
+		});
+		
+		logger.info('Server initialized', { 
+			maxHistorySize: this.maxHistorySize,
+			sessionId: this.sessionId,
+			persistenceEnabled: options.enablePersistence ?? true,
+		});
 		
 		// Always include the sequential thinking tool
 		const tools = [
@@ -65,39 +86,41 @@ class ToolAwareSequentialThinkingServer {
 		// Initialize with provided tools
 		tools.forEach((tool) => {
 			if (this.available_tools.has(tool.name)) {
-				console.error(
-					`Warning: Duplicate tool name '${tool.name}' - using first occurrence`,
-				);
+				logger.warn('Duplicate tool name detected', { 
+					toolName: tool.name,
+					message: 'Using first occurrence'
+				});
 				return;
 			}
 			this.available_tools.set(tool.name, tool);
 		});
 
-		console.error(
-			'Available tools:',
-			Array.from(this.available_tools.keys()),
-		);
+		logger.info('Tools initialized', { 
+			toolCount: this.available_tools.size,
+			tools: Array.from(this.available_tools.keys())
+		});
 	}
 
 	public clearHistory(): void {
 		this.thought_history = [];
 		this.branches = {};
-		console.error('History cleared');
+		this.persistence.clearHistory(this.sessionId);
+		logger.info('History cleared', { sessionId: this.sessionId });
 	}
 
 	public addTool(tool: Tool): void {
 		if (this.available_tools.has(tool.name)) {
-			console.error(`Warning: Tool '${tool.name}' already exists`);
+			logger.warn('Tool already exists', { toolName: tool.name });
 			return;
 		}
 		this.available_tools.set(tool.name, tool);
-		console.error(`Added tool: ${tool.name}`);
+		logger.info('Tool added', { toolName: tool.name });
 	}
 
 	public discoverTools(): void {
 		// In a real implementation, this would scan the environment
 		// for available MCP tools and add them to available_tools
-		console.error('Tool discovery not implemented - manually add tools via addTool()');
+		logger.warn('Tool discovery not implemented - manually add tools via addTool()');
 	}
 
 	private formatRecommendation(step: StepRecommendation): string {
@@ -171,89 +194,126 @@ Expected Outcome: ${step.expected_outcome}${
 	}
 
 	public async processThought(input: v.InferInput<typeof SequentialThinkingSchema>) {
-		try {
-			// Input is already validated by tmcp with Valibot
-			const validatedInput = input as ThoughtData;
+		return measureTime('processThought', async () => {
+			try {
+				// Input is already validated by tmcp with Valibot
+				const validatedInput = input as ThoughtData;
 
-			if (
-				validatedInput.thought_number > validatedInput.total_thoughts
-			) {
-				validatedInput.total_thoughts = validatedInput.thought_number;
-			}
+				logger.debug('Processing thought', {
+					thoughtNumber: validatedInput.thought_number,
+					totalThoughts: validatedInput.total_thoughts,
+					isRevision: validatedInput.is_revision,
+					branchId: validatedInput.branch_id,
+				});
 
-			// Store the current step in thought history
-			if (validatedInput.current_step) {
-				if (!validatedInput.previous_steps) {
-					validatedInput.previous_steps = [];
+				if (
+					validatedInput.thought_number > validatedInput.total_thoughts
+				) {
+					validatedInput.total_thoughts = validatedInput.thought_number;
+					logger.debug('Adjusted total thoughts', {
+						newTotal: validatedInput.total_thoughts
+					});
 				}
-				validatedInput.previous_steps.push(validatedInput.current_step);
-			}
 
-			this.thought_history.push(validatedInput);
-		
-		// Prevent memory leaks by limiting history size
-		if (this.thought_history.length > this.maxHistorySize) {
-			this.thought_history = this.thought_history.slice(-this.maxHistorySize);
-			console.error(`History trimmed to ${this.maxHistorySize} items`);
-		}
-
-			if (
-				validatedInput.branch_from_thought &&
-				validatedInput.branch_id
-			) {
-				if (!this.branches[validatedInput.branch_id]) {
-					this.branches[validatedInput.branch_id] = [];
+				// Store the current step in thought history
+				if (validatedInput.current_step) {
+					if (!validatedInput.previous_steps) {
+						validatedInput.previous_steps = [];
+					}
+					validatedInput.previous_steps.push(validatedInput.current_step);
 				}
-				this.branches[validatedInput.branch_id].push(validatedInput);
+
+				// Add to in-memory history
+				this.thought_history.push(validatedInput);
+			
+				// Prevent memory leaks by limiting history size
+				if (this.thought_history.length > this.maxHistorySize) {
+					this.thought_history = this.thought_history.slice(-this.maxHistorySize);
+					logger.warn('History trimmed', { maxSize: this.maxHistorySize });
+				}
+
+				// Save to persistent storage
+				await this.persistence.saveThought(validatedInput, this.sessionId);
+
+				if (
+					validatedInput.branch_from_thought &&
+					validatedInput.branch_id
+				) {
+					if (!this.branches[validatedInput.branch_id]) {
+						this.branches[validatedInput.branch_id] = [];
+					}
+					this.branches[validatedInput.branch_id].push(validatedInput);
+					logger.debug('Branch updated', { 
+						branchId: validatedInput.branch_id,
+						branchSize: this.branches[validatedInput.branch_id].length
+					});
+				}
+
+				const formattedThought = this.formatThought(validatedInput);
+				console.error(formattedThought);
+
+				logger.info('Thought processed successfully', {
+					thoughtNumber: validatedInput.thought_number,
+					historyLength: this.thought_history.length,
+				});
+
+				return {
+					content: [
+						{
+							type: 'text' as const,
+							text: JSON.stringify(
+								{
+									thought_number: validatedInput.thought_number,
+									total_thoughts: validatedInput.total_thoughts,
+									next_thought_needed:
+										validatedInput.next_thought_needed,
+									branches: Object.keys(this.branches),
+									thought_history_length: this.thought_history.length,
+									available_mcp_tools: validatedInput.available_mcp_tools,
+									current_step: validatedInput.current_step,
+									previous_steps: validatedInput.previous_steps,
+									remaining_steps: validatedInput.remaining_steps,
+								},
+								null,
+								2,
+							),
+						},
+					],
+				};
+			} catch (error) {
+				const errorContext = createErrorContext('processThought', error, {
+					thoughtNumber: input.thought_number,
+					branchId: input.branch_id,
+				});
+				
+				logger.error('Failed to process thought', error, { 
+					operation: errorContext.operation,
+					timestamp: errorContext.timestamp,
+					errorType: errorContext.errorType,
+					thoughtNumber: errorContext.thoughtNumber,
+					branchId: errorContext.branchId,
+				});
+				
+				return {
+					content: [
+						{
+							type: 'text' as const,
+							text: JSON.stringify(
+								{
+									error: errorContext.error,
+									errorType: errorContext.errorType,
+									status: 'failed',
+									context: errorContext,
+								},
+								null,
+								2,
+							),
+						},
+					],
+					isError: true,
+				};
 			}
-
-			const formattedThought = this.formatThought(validatedInput);
-			console.error(formattedThought);
-
-			return {
-				content: [
-					{
-						type: 'text' as const,
-						text: JSON.stringify(
-							{
-								thought_number: validatedInput.thought_number,
-								total_thoughts: validatedInput.total_thoughts,
-								next_thought_needed:
-									validatedInput.next_thought_needed,
-								branches: Object.keys(this.branches),
-								thought_history_length: this.thought_history.length,
-								available_mcp_tools: validatedInput.available_mcp_tools,
-								current_step: validatedInput.current_step,
-								previous_steps: validatedInput.previous_steps,
-								remaining_steps: validatedInput.remaining_steps,
-							},
-							null,
-							2,
-						),
-					},
-				],
-			};
-		} catch (error) {
-			return {
-				content: [
-					{
-						type: 'text' as const,
-						text: JSON.stringify(
-							{
-								error:
-									error instanceof Error
-										? error.message
-										: String(error),
-								status: 'failed',
-							},
-							null,
-							2,
-						),
-					},
-				],
-				isError: true,
-			};
-		}
+		});
 	}
 
 	// Tool execution removed - the MCP client handles tool execution
@@ -262,10 +322,20 @@ Expected Outcome: ${step.expected_outcome}${
 
 // Read configuration from environment variables or command line args
 const maxHistorySize = parseInt(process.env.MAX_HISTORY_SIZE || '1000');
+const enablePersistence = process.env.ENABLE_PERSISTENCE !== 'false';
+const dbPath = process.env.DB_PATH || './mcp-thinking.db';
+
+logger.info('Starting MCP Sequential Thinking Tools server', {
+	maxHistorySize,
+	enablePersistence,
+	dbPath: enablePersistence ? dbPath : 'disabled',
+});
 
 const thinkingServer = new ToolAwareSequentialThinkingServer({
 	available_tools: [], // TODO: Add tool discovery mechanism
 	maxHistorySize,
+	enablePersistence,
+	dbPath,
 });
 
 // Register the sequential thinking tool
@@ -283,10 +353,15 @@ server.tool(
 async function main() {
 	const transport = new StdioTransport(server);
 	transport.listen();
-	console.error('Sequential Thinking MCP Server running on stdio');
+	logger.info('Sequential Thinking MCP Server running on stdio');
+	
+	// Log metrics periodically (every 5 minutes)
+	setInterval(() => {
+		logger.logMetrics();
+	}, 5 * 60 * 1000);
 }
 
 main().catch((error) => {
-	console.error('Fatal error running server:', error);
+	logger.error('Fatal error running server', error);
 	process.exit(1);
 });
