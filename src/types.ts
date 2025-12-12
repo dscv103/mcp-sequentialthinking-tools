@@ -31,12 +31,25 @@ export interface ThoughtData {
 	current_step?: StepRecommendation;  // Current step being considered
 	previous_steps?: StepRecommendation[];  // Steps already recommended
 	remaining_steps?: string[];  // High-level descriptions of upcoming steps
+	
+	// Confidence scoring for backtracking support
+	confidence?: number;  // 0-1 confidence in current thought path
+}
+
+export interface ToolCapability {
+	category: string;  // e.g., "data", "search", "analysis", "communication"
+	tags: string[];  // Capability tags like "read", "write", "transform", "query"
+	inputTypes?: string[];  // Types of input the tool accepts
+	outputTypes?: string[];  // Types of output the tool produces
+	complexity?: 'low' | 'medium' | 'high';  // Complexity level
+	costLevel?: 'free' | 'low' | 'medium' | 'high';  // Cost/resource level
 }
 
 export interface Tool {
 	name: string;
 	description: string;
 	inputSchema: Record<string, unknown>;
+	capabilities?: ToolCapability;  // Extended capability metadata
 }
 
 export interface ServerConfig {

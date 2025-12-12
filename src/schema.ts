@@ -29,6 +29,8 @@ Key features:
 - Provides rationale for tool recommendations
 - Suggests tool execution order and parameters
 - Tracks previous recommendations and remaining steps
+- Confidence scoring helps identify low-quality reasoning paths
+- Automatic backtracking suggestions when confidence is low
 
 Parameters explained:
 - available_mcp_tools: Array of MCP tool names that are available for use (e.g., ["mcp-omnisearch", "mcp-turso-cloud"])
@@ -49,6 +51,7 @@ Parameters explained:
 - branch_from_thought: If branching, which thought number is the branching point
 - branch_id: Identifier for the current branch (if any)
 - needs_more_thoughts: If reaching end but realizing more thoughts needed
+- confidence: Optional confidence score (0-1) for current thought path quality
 - current_step: Current step recommendation, including:
 * step_description: What needs to be done
 * recommended_tools: Tools recommended for this step
@@ -71,8 +74,10 @@ You should:
 11. Suggest specific tool parameters when appropriate
 12. Consider alternative tools for each step
 13. Track progress through the recommended steps
-14. Provide a single, ideally correct answer as the final output
-15. Only set next_thought_needed to false when truly done and a satisfactory answer is reached`;
+14. Optionally provide confidence scores to enable quality monitoring
+15. Pay attention to backtracking suggestions if confidence is low
+16. Provide a single, ideally correct answer as the final output
+17. Only set next_thought_needed to false when truly done and a satisfactory answer is reached`;
 
 export const ToolRecommendationSchema = v.object({
 	tool_name: v.pipe(
@@ -178,6 +183,12 @@ export const SequentialThinkingSchema = v.object({
 	remaining_steps: v.optional(v.pipe(
 		v.array(v.string()),
 		v.description('High-level descriptions of upcoming steps')
+	)),
+	confidence: v.optional(v.pipe(
+		v.number(),
+		v.minValue(0),
+		v.maxValue(1),
+		v.description('Confidence score (0-1) for current thought path')
 	))
 });
 

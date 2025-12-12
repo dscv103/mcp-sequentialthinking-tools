@@ -16,6 +16,8 @@ import { ThoughtData, ToolRecommendation, StepRecommendation, Tool } from './typ
 import { logger, measureTime } from './logging.js';
 import { withRetry, safeExecute, createErrorContext } from './error-handling.js';
 import { PersistenceLayer } from './persistence.js';
+import { ToolCapabilityMatcher, enrichToolsWithCapabilities } from './tool-capabilities.js';
+import { BacktrackingManager } from './backtracking.js';
 
 // Get version from package.json
 const __filename = fileURLToPath(import.meta.url);
@@ -47,6 +49,8 @@ interface ServerOptions {
 	enablePersistence?: boolean;
 	dbPath?: string;
 	sessionId?: string;
+	enableBacktracking?: boolean;
+	minConfidence?: number;
 }
 
 class ToolAwareSequentialThinkingServer {
@@ -56,6 +60,8 @@ class ToolAwareSequentialThinkingServer {
 	private maxHistorySize: number;
 	private persistence: PersistenceLayer;
 	private sessionId: string;
+	private toolMatcher: ToolCapabilityMatcher;
+	private backtrackingManager: BacktrackingManager;
 
 	public getAvailableTools(): Tool[] {
 		return Array.from(this.available_tools.values());
@@ -71,10 +77,17 @@ class ToolAwareSequentialThinkingServer {
 			dbPath: options.dbPath,
 		});
 		
+		// Initialize backtracking manager
+		this.backtrackingManager = new BacktrackingManager({
+			enableAutoBacktrack: options.enableBacktracking ?? false,
+			minConfidence: options.minConfidence ?? 0.3,
+		});
+		
 		logger.info('Server initialized', { 
 			maxHistorySize: this.maxHistorySize,
 			sessionId: this.sessionId,
 			persistenceEnabled: options.enablePersistence ?? true,
+			backtrackingEnabled: options.enableBacktracking ?? false,
 		});
 		
 		// Always include the sequential thinking tool
@@ -95,9 +108,17 @@ class ToolAwareSequentialThinkingServer {
 			this.available_tools.set(tool.name, tool);
 		});
 
+		// Enrich tools with capability metadata
+		enrichToolsWithCapabilities(this.available_tools);
+		
+		// Initialize tool matcher
+		this.toolMatcher = new ToolCapabilityMatcher(this.available_tools);
+
 		logger.info('Tools initialized', { 
 			toolCount: this.available_tools.size,
-			tools: Array.from(this.available_tools.keys())
+			tools: Array.from(this.available_tools.keys()),
+			categories: this.toolMatcher.getCategories(),
+			tags: this.toolMatcher.getTags(),
 		});
 	}
 
@@ -105,6 +126,7 @@ class ToolAwareSequentialThinkingServer {
 		this.thought_history = [];
 		this.branches = {};
 		this.persistence.clearHistory(this.sessionId);
+		this.backtrackingManager.clear();
 		logger.info('History cleared', { sessionId: this.sessionId });
 	}
 
@@ -114,6 +136,13 @@ class ToolAwareSequentialThinkingServer {
 			return;
 		}
 		this.available_tools.set(tool.name, tool);
+		
+		// Enrich with capabilities if not present
+		enrichToolsWithCapabilities(this.available_tools);
+		
+		// Recreate matcher with updated tools
+		this.toolMatcher = new ToolCapabilityMatcher(this.available_tools);
+		
 		logger.info('Tool added', { toolName: tool.name });
 	}
 
@@ -215,6 +244,47 @@ Expected Outcome: ${step.expected_outcome}${
 					});
 				}
 
+				// Calculate confidence if not provided
+				if (validatedInput.confidence === undefined) {
+					validatedInput.confidence = this.backtrackingManager.calculateConfidence(validatedInput);
+					logger.debug('Calculated confidence', {
+						thoughtNumber: validatedInput.thought_number,
+						confidence: validatedInput.confidence,
+					});
+				}
+
+				// Check if backtracking is needed
+				const backtrackDecision = this.backtrackingManager.shouldBacktrack(validatedInput);
+				if (backtrackDecision.shouldBacktrack) {
+					logger.warn('Backtracking triggered', {
+						thoughtNumber: validatedInput.thought_number,
+						reason: backtrackDecision.reason,
+						backtrackTo: backtrackDecision.backtrackTo,
+					});
+					
+					// Include backtracking suggestion in response
+					return {
+						content: [
+							{
+								type: 'text' as const,
+								text: JSON.stringify(
+									{
+										thought_number: validatedInput.thought_number,
+										total_thoughts: validatedInput.total_thoughts,
+										confidence: validatedInput.confidence,
+										backtracking_suggested: true,
+										backtrack_reason: backtrackDecision.reason,
+										backtrack_to_thought: backtrackDecision.backtrackTo,
+										message: 'Low confidence detected. Consider revising approach from earlier thought.',
+									},
+									null,
+									2,
+								),
+							},
+						],
+					};
+				}
+
 				// Store the current step in thought history
 				if (validatedInput.current_step) {
 					if (!validatedInput.previous_steps) {
@@ -255,7 +325,11 @@ Expected Outcome: ${step.expected_outcome}${
 				logger.info('Thought processed successfully', {
 					thoughtNumber: validatedInput.thought_number,
 					historyLength: this.thought_history.length,
+					confidence: validatedInput.confidence,
 				});
+
+				// Get confidence statistics
+				const confidenceStats = this.backtrackingManager.getConfidenceStats();
 
 				return {
 					content: [
@@ -267,6 +341,8 @@ Expected Outcome: ${step.expected_outcome}${
 									total_thoughts: validatedInput.total_thoughts,
 									next_thought_needed:
 										validatedInput.next_thought_needed,
+									confidence: validatedInput.confidence,
+									confidence_stats: confidenceStats,
 									branches: Object.keys(this.branches),
 									thought_history_length: this.thought_history.length,
 									available_mcp_tools: validatedInput.available_mcp_tools,
@@ -324,11 +400,15 @@ Expected Outcome: ${step.expected_outcome}${
 const maxHistorySize = parseInt(process.env.MAX_HISTORY_SIZE || '1000');
 const enablePersistence = process.env.ENABLE_PERSISTENCE !== 'false';
 const dbPath = process.env.DB_PATH || './mcp-thinking.db';
+const enableBacktracking = process.env.ENABLE_BACKTRACKING === 'true';
+const minConfidence = parseFloat(process.env.MIN_CONFIDENCE || '0.3');
 
 logger.info('Starting MCP Sequential Thinking Tools server', {
 	maxHistorySize,
 	enablePersistence,
 	dbPath: enablePersistence ? dbPath : 'disabled',
+	enableBacktracking,
+	minConfidence,
 });
 
 const thinkingServer = new ToolAwareSequentialThinkingServer({
@@ -336,6 +416,8 @@ const thinkingServer = new ToolAwareSequentialThinkingServer({
 	maxHistorySize,
 	enablePersistence,
 	dbPath,
+	enableBacktracking,
+	minConfidence,
 });
 
 // Register the sequential thinking tool
