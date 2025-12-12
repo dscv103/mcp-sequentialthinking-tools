@@ -18,6 +18,8 @@ import { withRetry, safeExecute, createErrorContext } from './error-handling.js'
 import { PersistenceLayer } from './persistence.js';
 import { ToolCapabilityMatcher, enrichToolsWithCapabilities } from './tool-capabilities.js';
 import { BacktrackingManager } from './backtracking.js';
+import { ThoughtDAG } from './dag.js';
+import { ToolChainLibrary } from './tool-chains.js';
 
 // Get version from package.json
 const __filename = fileURLToPath(import.meta.url);
@@ -51,6 +53,8 @@ interface ServerOptions {
 	sessionId?: string;
 	enableBacktracking?: boolean;
 	minConfidence?: number;
+	enableDAG?: boolean;
+	enableToolChains?: boolean;
 }
 
 class ToolAwareSequentialThinkingServer {
@@ -62,6 +66,10 @@ class ToolAwareSequentialThinkingServer {
 	private sessionId: string;
 	private toolMatcher: ToolCapabilityMatcher;
 	private backtrackingManager: BacktrackingManager;
+	private thoughtDAG: ThoughtDAG;
+	private toolChainLibrary: ToolChainLibrary;
+	private enableDAG: boolean;
+	private enableToolChains: boolean;
 
 	public getAvailableTools(): Tool[] {
 		return Array.from(this.available_tools.values());
@@ -70,6 +78,8 @@ class ToolAwareSequentialThinkingServer {
 	constructor(options: ServerOptions = {}) {
 		this.maxHistorySize = options.maxHistorySize || 1000;
 		this.sessionId = options.sessionId || `session-${Date.now()}`;
+		this.enableDAG = options.enableDAG ?? false;
+		this.enableToolChains = options.enableToolChains ?? true;
 		
 		// Initialize persistence layer
 		this.persistence = new PersistenceLayer({
@@ -83,11 +93,19 @@ class ToolAwareSequentialThinkingServer {
 			minConfidence: options.minConfidence ?? 0.3,
 		});
 		
+		// Initialize DAG for parallel execution
+		this.thoughtDAG = new ThoughtDAG();
+		
+		// Initialize tool chain library
+		this.toolChainLibrary = new ToolChainLibrary();
+		
 		logger.info('Server initialized', { 
 			maxHistorySize: this.maxHistorySize,
 			sessionId: this.sessionId,
 			persistenceEnabled: options.enablePersistence ?? true,
 			backtrackingEnabled: options.enableBacktracking ?? false,
+			dagEnabled: this.enableDAG,
+			toolChainsEnabled: this.enableToolChains,
 		});
 		
 		// Always include the sequential thinking tool
@@ -127,6 +145,8 @@ class ToolAwareSequentialThinkingServer {
 		this.branches = {};
 		this.persistence.clearHistory(this.sessionId);
 		this.backtrackingManager.clear();
+		this.thoughtDAG.clear();
+		this.toolChainLibrary.clear();
 		logger.info('History cleared', { sessionId: this.sessionId });
 	}
 
@@ -291,6 +311,25 @@ Expected Outcome: ${step.expected_outcome}${
 						validatedInput.previous_steps = [];
 					}
 					validatedInput.previous_steps.push(validatedInput.current_step);
+					
+					// Track tool usage in chain library
+					if (this.enableToolChains) {
+						for (const toolRec of validatedInput.current_step.recommended_tools) {
+							this.toolChainLibrary.recordToolUse(
+								toolRec.tool_name,
+								validatedInput.current_step.step_description
+							);
+						}
+					}
+				}
+
+				// Add to DAG if enabled
+				if (this.enableDAG) {
+					this.thoughtDAG.addThought(validatedInput);
+					
+					// Get DAG statistics
+					const dagStats = this.thoughtDAG.getStats();
+					logger.debug('DAG updated', dagStats);
 				}
 
 				// Add to in-memory history
@@ -330,6 +369,29 @@ Expected Outcome: ${step.expected_outcome}${
 
 				// Get confidence statistics
 				const confidenceStats = this.backtrackingManager.getConfidenceStats();
+				
+				// Get tool chain suggestions if enabled
+				let toolChainSuggestions;
+				if (this.enableToolChains && validatedInput.previous_steps) {
+					const previousTools = validatedInput.previous_steps
+						.flatMap(step => step.recommended_tools.map(t => t.tool_name));
+					const nextToolSuggestions = this.toolChainLibrary.suggestNextTool(previousTools);
+					
+					if (nextToolSuggestions.length > 0) {
+						toolChainSuggestions = nextToolSuggestions.slice(0, 3);
+						logger.debug('Tool chain suggestions generated', {
+							suggestionCount: toolChainSuggestions.length,
+						});
+					}
+				}
+				
+				// Get DAG stats if enabled
+				let dagStats;
+				if (this.enableDAG) {
+					dagStats = this.thoughtDAG.getStats();
+					const parallelGroups = this.thoughtDAG.getParallelGroups();
+					dagStats = { ...dagStats, parallelGroupCount: parallelGroups.length };
+				}
 
 				return {
 					content: [
@@ -349,6 +411,8 @@ Expected Outcome: ${step.expected_outcome}${
 									current_step: validatedInput.current_step,
 									previous_steps: validatedInput.previous_steps,
 									remaining_steps: validatedInput.remaining_steps,
+									tool_chain_suggestions: toolChainSuggestions,
+									dag_stats: dagStats,
 								},
 								null,
 								2,
@@ -402,6 +466,8 @@ const enablePersistence = process.env.ENABLE_PERSISTENCE !== 'false';
 const dbPath = process.env.DB_PATH || './mcp-thinking.db';
 const enableBacktracking = process.env.ENABLE_BACKTRACKING === 'true';
 const minConfidence = parseFloat(process.env.MIN_CONFIDENCE || '0.3');
+const enableDAG = process.env.ENABLE_DAG === 'true';
+const enableToolChains = process.env.ENABLE_TOOL_CHAINS !== 'false';
 
 logger.info('Starting MCP Sequential Thinking Tools server', {
 	maxHistorySize,
@@ -409,6 +475,8 @@ logger.info('Starting MCP Sequential Thinking Tools server', {
 	dbPath: enablePersistence ? dbPath : 'disabled',
 	enableBacktracking,
 	minConfidence,
+	enableDAG,
+	enableToolChains,
 });
 
 const thinkingServer = new ToolAwareSequentialThinkingServer({
@@ -418,6 +486,8 @@ const thinkingServer = new ToolAwareSequentialThinkingServer({
 	dbPath,
 	enableBacktracking,
 	minConfidence,
+	enableDAG,
+	enableToolChains,
 });
 
 // Register the sequential thinking tool
