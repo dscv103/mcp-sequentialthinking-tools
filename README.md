@@ -24,13 +24,20 @@ be appropriate.
 - 🔄 Flexible thinking process that adapts and evolves
 - 🌳 Support for branching and revision of thoughts
 - 🛠️ LLM-driven intelligent tool recommendations for each step
-- 📊 Confidence scoring for tool suggestions
+- 📊 Confidence scoring for tool suggestions and reasoning quality
 - 🔍 Detailed rationale for tool recommendations
 - 📝 Step tracking with expected outcomes
 - 🔄 Progress monitoring with previous and remaining steps
 - 🎯 Alternative tool suggestions for each step
 - 🧠 Memory management with configurable history limits
 - 🗑️ Manual history cleanup capabilities
+- 💾 **SQLite persistence** for long-running tasks
+- ⚡ **Retry logic** with exponential backoff for reliability
+- 📋 **Structured logging** with performance metrics
+- 🎯 **Tool capability metadata** for intelligent matching
+- 🔙 **Automatic backtracking** on low confidence paths
+- 🔀 **DAG-based execution** for parallel workflows
+- 🔗 **Tool chain learning** from successful patterns
 
 ## How It Works
 
@@ -171,6 +178,123 @@ Parameters:
 - `previous_steps` (array, optional): Steps already recommended
 - `remaining_steps` (array, optional): High-level descriptions of
   upcoming steps
+- `confidence` (number, optional): Confidence score (0-1) for current thought path
+
+## Advanced Features
+
+### Error Handling & Retry Logic
+
+The server includes comprehensive error handling with automatic retry for transient failures:
+
+- **Exponential Backoff**: Automatically retries failed operations with increasing delays
+- **Structured Error Context**: Provides detailed error information for debugging
+- **Retryable Error Detection**: Identifies network errors, timeouts, and rate limits
+- **Error Recovery**: Prevents cascading failures and maintains reasoning progress
+
+### Structured Logging & Telemetry
+
+Production-ready logging with performance tracking:
+
+- **JSON Structured Logs**: Enable with `STRUCTURED_LOGS=true`
+- **Performance Metrics**: Automatic tracking of operation durations
+- **Log Levels**: Configure with `LOG_LEVEL` (debug, info, warn, error)
+- **Metric Reporting**: Periodic performance summaries
+
+### State Persistence with SQLite
+
+Long-running tasks survive server restarts:
+
+- **Persistent Storage**: All thoughts, steps, and recommendations saved to SQLite
+- **Session Management**: Thoughts grouped by session for easy tracking
+- **Database Schema**: Optimized indexes for fast queries
+- **Optional Disable**: Set `ENABLE_PERSISTENCE=false` to disable
+
+### Tool Capability Metadata System
+
+Intelligent tool matching through structured capabilities:
+
+- **Auto-Enrichment**: Automatically infers capabilities from tool descriptions
+- **Category Tags**: Tools organized by category (data, search, analysis, etc.)
+- **Capability Matching**: Score-based matching of tools to requirements
+- **Similar Tool Discovery**: Find alternative tools with similar capabilities
+
+### Backtracking with Confidence Scoring
+
+Prevents low-quality reasoning paths:
+
+- **Automatic Confidence**: Calculates confidence based on multiple factors
+- **Backtracking Suggestions**: Recommends revision when confidence is low
+- **Confidence Tracking**: Statistical analysis of reasoning quality
+- **Manual Override**: Optionally provide confidence scores
+
+### DAG-Based Task Execution
+
+Enables parallel execution of independent thoughts:
+
+- **Dependency Tracking**: Automatically builds dependency graph
+- **Parallel Groups**: Identifies thoughts that can execute in parallel
+- **Topological Sort**: Determines optimal execution order
+- **Status Management**: Tracks pending, executing, completed, and failed thoughts
+
+### Tool Chain Pattern Library
+
+Learns from successful tool sequences:
+
+- **Pattern Recording**: Tracks successful tool chains
+- **Next Tool Suggestions**: Recommends tools based on historical patterns
+- **Context Matching**: Matches chains by keywords and context
+- **Success Rate Tracking**: Prioritizes proven patterns
+
+## Configuration
+
+### Environment Variables
+
+All features can be configured via environment variables:
+
+```bash
+# History management
+MAX_HISTORY_SIZE=1000              # Maximum thoughts to retain (default: 1000)
+
+# Persistence
+ENABLE_PERSISTENCE=true            # Enable SQLite persistence (default: true)
+DB_PATH=./mcp-thinking.db          # Database file path (default: ./mcp-thinking.db)
+
+# Logging
+LOG_LEVEL=info                     # Log level: debug, info, warn, error (default: info)
+STRUCTURED_LOGS=false              # Enable JSON structured logs (default: false)
+
+# Backtracking
+ENABLE_BACKTRACKING=false          # Enable automatic backtracking (default: false)
+MIN_CONFIDENCE=0.3                 # Minimum confidence threshold (default: 0.3)
+
+# DAG execution
+ENABLE_DAG=false                   # Enable DAG-based execution (default: false)
+
+# Tool chains
+ENABLE_TOOL_CHAINS=true            # Enable tool chain learning (default: true)
+```
+
+### Example Configuration
+
+```json
+{
+  "mcpServers": {
+    "mcp-sequentialthinking-tools": {
+      "command": "npx",
+      "args": ["-y", "mcp-sequentialthinking-tools"],
+      "env": {
+        "MAX_HISTORY_SIZE": "2000",
+        "ENABLE_PERSISTENCE": "true",
+        "ENABLE_BACKTRACKING": "true",
+        "MIN_CONFIDENCE": "0.4",
+        "ENABLE_DAG": "true",
+        "LOG_LEVEL": "debug",
+        "STRUCTURED_LOGS": "true"
+      }
+    }
+  }
+}
+```
 
 ## Memory Management
 
@@ -179,6 +303,7 @@ The server includes built-in memory management to prevent unbounded growth:
 - **History Limit**: Configurable maximum number of thoughts to retain (default: 1000)
 - **Automatic Trimming**: History automatically trims when limit is exceeded
 - **Manual Cleanup**: Server provides methods to clear history when needed
+- **Persistent Backup**: Cleared items remain in SQLite database
 
 ### Configuring History Size
 

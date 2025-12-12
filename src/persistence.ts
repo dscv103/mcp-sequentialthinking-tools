@@ -136,13 +136,13 @@ export class PersistenceLayer {
 
 			// Save current step if present
 			if (thought.current_step) {
-				await this.saveStepRecommendation(thoughtId, thought.current_step, true);
+				this.saveStepRecommendation(thoughtId, thought.current_step, true);
 			}
 
 			// Save previous steps
 			if (thought.previous_steps) {
 				for (const step of thought.previous_steps) {
-					await this.saveStepRecommendation(thoughtId, step, false);
+					this.saveStepRecommendation(thoughtId, step, false);
 				}
 			}
 
@@ -157,11 +157,11 @@ export class PersistenceLayer {
 		return result.success ? result.data! : null;
 	}
 
-	private async saveStepRecommendation(
+	private saveStepRecommendation(
 		thoughtId: number, 
 		step: StepRecommendation, 
 		isCurrent: boolean
-	): Promise<void> {
+	): void {
 		if (!this.db) return;
 
 		const stmt = this.db.prepare(`

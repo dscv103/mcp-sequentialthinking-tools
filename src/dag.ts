@@ -283,32 +283,48 @@ export class ThoughtDAG {
 	getParallelGroups(): number[][] {
 		const levels: Map<number, number> = new Map(); // thoughtNum -> level
 		
-		// Calculate level for each node (longest path from root)
-		const calculateLevel = (thoughtNum: number): number => {
-			if (levels.has(thoughtNum)) {
-				return levels.get(thoughtNum)!;
+		// Calculate level for each node iteratively to avoid stack overflow
+		const calculateLevels = () => {
+			// Start with nodes that have no dependencies
+			const queue: number[] = [];
+			for (const [thoughtNum, node] of this.nodes.entries()) {
+				if (node.dependencies.length === 0) {
+					levels.set(thoughtNum, 0);
+					queue.push(thoughtNum);
+				}
 			}
 
-			const node = this.nodes.get(thoughtNum);
-			if (!node) return 0;
+			// Process queue
+			while (queue.length > 0) {
+				const current = queue.shift()!;
+				const currentLevel = levels.get(current)!;
 
-			if (node.dependencies.length === 0) {
-				levels.set(thoughtNum, 0);
-				return 0;
+				// Update children
+				const node = this.nodes.get(current);
+				if (node) {
+					for (const childNum of node.children) {
+						const childNode = this.nodes.get(childNum);
+						if (!childNode) continue;
+
+						// Check if all dependencies are processed
+						const allDepsProcessed = childNode.dependencies.every(dep => 
+							levels.has(dep)
+						);
+
+						if (allDepsProcessed) {
+							// Calculate max level from all dependencies
+							const maxDepLevel = Math.max(
+								...childNode.dependencies.map(dep => levels.get(dep) || 0)
+							);
+							levels.set(childNum, maxDepLevel + 1);
+							queue.push(childNum);
+						}
+					}
+				}
 			}
-
-			const maxDepLevel = Math.max(
-				...node.dependencies.map(dep => calculateLevel(dep))
-			);
-			const level = maxDepLevel + 1;
-			levels.set(thoughtNum, level);
-			return level;
 		};
 
-		// Calculate levels for all nodes
-		for (const thoughtNum of this.nodes.keys()) {
-			calculateLevel(thoughtNum);
-		}
+		calculateLevels();
 
 		// Group by level
 		const groups: Map<number, number[]> = new Map();

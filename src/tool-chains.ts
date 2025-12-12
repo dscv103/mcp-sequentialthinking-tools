@@ -5,7 +5,6 @@
 
 import { StepRecommendation, ToolRecommendation } from './types.js';
 import { logger } from './logging.js';
-import { PersistenceLayer } from './persistence.js';
 
 export interface ToolChain {
 	id: string;
