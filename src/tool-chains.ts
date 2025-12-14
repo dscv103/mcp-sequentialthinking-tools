@@ -83,7 +83,7 @@ export class ToolChainLibrary {
 			if (confidence !== undefined) {
 				// Update rolling average
 				chain.averageConfidence = 
-				chain.averageConfidence * (1 - this.scoring.confidenceWeight) + 
+					chain.averageConfidence * (1 - this.scoring.confidenceWeight) + 
 					confidence * this.scoring.confidenceWeight;
 			}
 			chain.lastUsed = new Date().toISOString();

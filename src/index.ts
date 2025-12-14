@@ -190,6 +190,8 @@ class ToolAwareSequentialThinkingServer {
 			revisionPenalty: this.scoringConfig.backtracking.revisionPenalty,
 			branchBonus: this.scoringConfig.backtracking.branchBonus,
 			progressBonus: this.scoringConfig.backtracking.progressBonus,
+			progressThreshold: this.scoringConfig.backtracking.progressThreshold,
+			decliningConfidenceThreshold: this.scoringConfig.backtracking.decliningConfidenceThreshold,
 		});
 		
 		// Initialize DAG for parallel execution
