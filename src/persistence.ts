@@ -107,14 +107,15 @@ export class PersistenceLayer {
 	}
 
 	async saveThought(thought: ThoughtData, sessionId?: string): Promise<number | null> {
-		if (!this.db || !this.config.enablePersistence) return null;
+		const db = this.db;
+		if (!db || !this.config.enablePersistence) return null;
 
 		const result = await safeExecute(async () => {
 			// Use transaction for atomicity
-			this.db!.exec('BEGIN TRANSACTION');
+			db.exec('BEGIN TRANSACTION');
 			
 			try {
-				const stmt = this.db!.prepare(`
+				const stmt = db.prepare(`
 					INSERT INTO thoughts (
 						thought_number, total_thoughts, thought, is_revision, revises_thought,
 						branch_from_thought, branch_id, needs_more_thoughts, next_thought_needed,
@@ -142,17 +143,17 @@ export class PersistenceLayer {
 
 				// Save current step if present
 				if (thought.current_step) {
-					this.saveStepRecommendation(thoughtId, thought.current_step, true);
+					this.saveStepRecommendation(db, thoughtId, thought.current_step, true);
 				}
 
 				// Save previous steps
 				if (thought.previous_steps) {
 					for (const step of thought.previous_steps) {
-						this.saveStepRecommendation(thoughtId, step, false);
+						this.saveStepRecommendation(db, thoughtId, step, false);
 					}
 				}
 
-				this.db!.exec('COMMIT');
+				db.exec('COMMIT');
 
 				logger.debug('Thought saved to database', { 
 					thoughtId, 
@@ -161,7 +162,7 @@ export class PersistenceLayer {
 
 				return thoughtId;
 			} catch (error) {
-				this.db!.exec('ROLLBACK');
+				db.exec('ROLLBACK');
 				throw error;
 			}
 		}, 'saveThought');
@@ -170,14 +171,15 @@ export class PersistenceLayer {
 	}
 
 	private saveStepRecommendation(
+		db: Database.Database,
 		thoughtId: number, 
 		step: StepRecommendation, 
 		isCurrent: boolean
 	): void {
-		if (!this.db) return;
+		if (!db) return;
 
 		try {
-			const stmt = this.db.prepare(`
+			const stmt = db.prepare(`
 				INSERT INTO step_recommendations (
 					thought_id, step_description, expected_outcome, next_step_conditions,
 					is_current, created_at
@@ -197,7 +199,7 @@ export class PersistenceLayer {
 
 			// Save tool recommendations
 			for (const tool of step.recommended_tools) {
-				const toolStmt = this.db.prepare(`
+				const toolStmt = db.prepare(`
 					INSERT INTO tool_recommendations (
 						step_id, tool_name, confidence, rationale, priority,
 						suggested_inputs, alternatives, created_at
@@ -226,7 +228,8 @@ export class PersistenceLayer {
 	}
 
 	async getThoughtHistory(sessionId?: string, limit: number = 100): Promise<ThoughtData[]> {
-		if (!this.db || !this.config.enablePersistence) return [];
+		const db = this.db;
+		if (!db || !this.config.enablePersistence) return [];
 
 		const result = await safeExecute(async () => {
 			const query = sessionId
@@ -234,7 +237,7 @@ export class PersistenceLayer {
 				: 'SELECT * FROM thoughts ORDER BY thought_number DESC LIMIT ?';
 			
 			const params = sessionId ? [sessionId, limit] : [limit];
-			const rows = this.db!.prepare(query).all(...params) as any[];
+			const rows = db.prepare(query).all(...params) as any[];
 
 			const thoughts: ThoughtData[] = [];
 			for (const row of rows) {
@@ -261,16 +264,17 @@ export class PersistenceLayer {
 	}
 
 	async clearHistory(sessionId?: string): Promise<void> {
-		if (!this.db || !this.config.enablePersistence) return;
+		const db = this.db;
+		if (!db || !this.config.enablePersistence) return;
 
 		await safeExecute(async () => {
 			if (sessionId) {
-				this.db!.prepare('DELETE FROM thoughts WHERE session_id = ?').run(sessionId);
+				db.prepare('DELETE FROM thoughts WHERE session_id = ?').run(sessionId);
 				logger.info('Session history cleared', { sessionId });
 			} else {
-				this.db!.exec('DELETE FROM thoughts');
-				this.db!.exec('DELETE FROM step_recommendations');
-				this.db!.exec('DELETE FROM tool_recommendations');
+				db.exec('DELETE FROM thoughts');
+				db.exec('DELETE FROM step_recommendations');
+				db.exec('DELETE FROM tool_recommendations');
 				logger.info('All history cleared');
 			}
 		}, 'clearHistory');

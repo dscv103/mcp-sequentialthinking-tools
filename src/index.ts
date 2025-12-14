@@ -21,6 +21,20 @@ import { BacktrackingManager } from './backtracking.js';
 import { ThoughtDAG } from './dag.js';
 import { ToolChainLibrary } from './tool-chains.js';
 
+const DEFAULT_MAX_HISTORY = 1000;
+const DEFAULT_MIN_CONFIDENCE = 0.3;
+const METRICS_INTERVAL_MS = 5 * 60 * 1000;
+
+const parseIntegerWithFallback = (value: string | undefined, fallback: number): number => {
+	const parsed = value !== undefined ? parseInt(value, 10) : NaN;
+	return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const parseNumberWithFallback = (value: string | undefined, fallback: number): number => {
+	const parsed = value !== undefined ? Number(value) : NaN;
+	return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 // Get version from package.json
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -47,6 +61,7 @@ const server = new McpServer(
 
 interface ServerOptions {
 	available_tools?: Tool[];
+	availableTools?: Tool[];
 	maxHistorySize?: number;
 	enablePersistence?: boolean;
 	dbPath?: string;
@@ -58,9 +73,9 @@ interface ServerOptions {
 }
 
 class ToolAwareSequentialThinkingServer {
-	private thought_history: ThoughtData[] = [];
+	private thoughtHistory: ThoughtData[] = [];
 	private branches: Record<string, ThoughtData[]> = {};
-	private available_tools: Map<string, Tool> = new Map();
+	private availableTools: Map<string, Tool> = new Map();
 	private maxHistorySize: number;
 	private persistence: PersistenceLayer;
 	private sessionId: string;
@@ -72,11 +87,11 @@ class ToolAwareSequentialThinkingServer {
 	private enableToolChains: boolean;
 
 	public getAvailableTools(): Tool[] {
-		return Array.from(this.available_tools.values());
+		return Array.from(this.availableTools.values());
 	}
 
 	constructor(options: ServerOptions = {}) {
-		this.maxHistorySize = options.maxHistorySize || 1000;
+		this.maxHistorySize = options.maxHistorySize ?? DEFAULT_MAX_HISTORY;
 		this.sessionId = options.sessionId || `session-${Date.now()}`;
 		this.enableDAG = options.enableDAG ?? false;
 		this.enableToolChains = options.enableToolChains ?? true;
@@ -90,7 +105,7 @@ class ToolAwareSequentialThinkingServer {
 		// Initialize backtracking manager
 		this.backtrackingManager = new BacktrackingManager({
 			enableAutoBacktrack: options.enableBacktracking ?? false,
-			minConfidence: options.minConfidence ?? 0.3,
+			minConfidence: options.minConfidence ?? DEFAULT_MIN_CONFIDENCE,
 		});
 		
 		// Initialize DAG for parallel execution
@@ -109,39 +124,43 @@ class ToolAwareSequentialThinkingServer {
 		});
 		
 		// Always include the sequential thinking tool
+		if (options.available_tools && !options.availableTools) {
+			logger.warn('The "available_tools" option is deprecated. Use "availableTools" instead.');
+		}
+		const providedTools = options.availableTools ?? options.available_tools ?? [];
 		const tools = [
 			SEQUENTIAL_THINKING_TOOL,
-			...(options.available_tools || []),
+			...providedTools,
 		];
 
 		// Initialize with provided tools
 		tools.forEach((tool) => {
-			if (this.available_tools.has(tool.name)) {
+			if (this.availableTools.has(tool.name)) {
 				logger.warn('Duplicate tool name detected', { 
 					toolName: tool.name,
 					message: 'Using first occurrence'
 				});
 				return;
 			}
-			this.available_tools.set(tool.name, tool);
+			this.availableTools.set(tool.name, tool);
 		});
 
 		// Enrich tools with capability metadata
-		enrichToolsWithCapabilities(this.available_tools);
+		enrichToolsWithCapabilities(this.availableTools);
 		
 		// Initialize tool matcher
-		this.toolMatcher = new ToolCapabilityMatcher(this.available_tools);
+		this.toolMatcher = new ToolCapabilityMatcher(this.availableTools);
 
 		logger.info('Tools initialized', { 
-			toolCount: this.available_tools.size,
-			tools: Array.from(this.available_tools.keys()),
+			toolCount: this.availableTools.size,
+			tools: Array.from(this.availableTools.keys()),
 			categories: this.toolMatcher.getCategories(),
 			tags: this.toolMatcher.getTags(),
 		});
 	}
 
 	public clearHistory(): void {
-		this.thought_history = [];
+		this.thoughtHistory = [];
 		this.branches = {};
 		this.persistence.clearHistory(this.sessionId);
 		this.backtrackingManager.clear();
@@ -151,24 +170,24 @@ class ToolAwareSequentialThinkingServer {
 	}
 
 	public addTool(tool: Tool): void {
-		if (this.available_tools.has(tool.name)) {
+		if (this.availableTools.has(tool.name)) {
 			logger.warn('Tool already exists', { toolName: tool.name });
 			return;
 		}
-		this.available_tools.set(tool.name, tool);
+		this.availableTools.set(tool.name, tool);
 		
 		// Enrich with capabilities if not present
-		enrichToolsWithCapabilities(this.available_tools);
+		enrichToolsWithCapabilities(this.availableTools);
 		
 		// Recreate matcher with updated tools
-		this.toolMatcher = new ToolCapabilityMatcher(this.available_tools);
+		this.toolMatcher = new ToolCapabilityMatcher(this.availableTools);
 		
 		logger.info('Tool added', { toolName: tool.name });
 	}
 
 	public discoverTools(): void {
 		// In a real implementation, this would scan the environment
-		// for available MCP tools and add them to available_tools
+		// for available MCP tools and add them to availableTools
 		logger.warn('Tool discovery not implemented - manually add tools via addTool()');
 	}
 
@@ -329,28 +348,39 @@ Expected Outcome: ${step.expected_outcome}${
 					}
 				}
 
+				let dagStats: (ReturnType<ThoughtDAG['getStats']> & { parallelGroupCount?: number }) | undefined;
+				
 				// Add to DAG if enabled
 				if (this.enableDAG) {
-					this.thoughtDAG.addThought(validatedInput);
-					
-					// Mark this thought as executing and then completed
-					this.thoughtDAG.markExecuting(validatedInput.thought_number);
-					this.thoughtDAG.markCompleted(validatedInput.thought_number, {
-						confidence: validatedInput.confidence,
-						thoughtNumber: validatedInput.thought_number,
-					});
-					
-					// Get DAG statistics
-					const dagStats = this.thoughtDAG.getStats();
-					logger.debug('DAG updated', dagStats);
+					try {
+						this.thoughtDAG.addThought(validatedInput);
+						
+						// Mark this thought as executing and then completed
+						this.thoughtDAG.markExecuting(validatedInput.thought_number);
+						this.thoughtDAG.markCompleted(validatedInput.thought_number, {
+							confidence: validatedInput.confidence,
+							thoughtNumber: validatedInput.thought_number,
+						});
+						
+						// Get DAG statistics
+						const stats = this.thoughtDAG.getStats();
+						const parallelGroups = this.thoughtDAG.getParallelGroups();
+						dagStats = { ...stats, parallelGroupCount: parallelGroups.length };
+						logger.debug('DAG updated', dagStats);
+					} catch (dagError) {
+						logger.error('Failed to update DAG', dagError, {
+							thoughtNumber: validatedInput.thought_number,
+						});
+					}
 				}
 
 				// Add to in-memory history
-				this.thought_history.push(validatedInput);
+				this.thoughtHistory.push(validatedInput);
 			
 				// Prevent memory leaks by limiting history size
-				if (this.thought_history.length > this.maxHistorySize) {
-					this.thought_history = this.thought_history.slice(-this.maxHistorySize);
+				if (this.thoughtHistory.length > this.maxHistorySize) {
+					const excess = this.thoughtHistory.length - this.maxHistorySize;
+					this.thoughtHistory.splice(0, excess);
 					logger.warn('History trimmed', { maxSize: this.maxHistorySize });
 				}
 
@@ -376,7 +406,7 @@ Expected Outcome: ${step.expected_outcome}${
 
 				logger.info('Thought processed successfully', {
 					thoughtNumber: validatedInput.thought_number,
-					historyLength: this.thought_history.length,
+					historyLength: this.thoughtHistory.length,
 					confidence: validatedInput.confidence,
 				});
 
@@ -398,14 +428,6 @@ Expected Outcome: ${step.expected_outcome}${
 					}
 				}
 				
-				// Get DAG stats if enabled
-				let dagStats;
-				if (this.enableDAG) {
-					dagStats = this.thoughtDAG.getStats();
-					const parallelGroups = this.thoughtDAG.getParallelGroups();
-					dagStats = { ...dagStats, parallelGroupCount: parallelGroups.length };
-				}
-
 				// Finalize tool chain if this is the last thought
 				if (this.enableToolChains && !validatedInput.next_thought_needed) {
 					const success = (validatedInput.confidence || 0.5) >= 0.5;
@@ -433,7 +455,7 @@ Expected Outcome: ${step.expected_outcome}${
 									confidence: validatedInput.confidence,
 									confidence_stats: confidenceStats,
 									branches: Object.keys(this.branches),
-									thought_history_length: this.thought_history.length,
+									thought_history_length: this.thoughtHistory.length,
 									available_mcp_tools: validatedInput.available_mcp_tools,
 									current_step: validatedInput.current_step,
 									previous_steps: validatedInput.previous_steps,
@@ -488,11 +510,11 @@ Expected Outcome: ${step.expected_outcome}${
 }
 
 // Read configuration from environment variables or command line args
-const maxHistorySize = parseInt(process.env.MAX_HISTORY_SIZE || '1000');
+const maxHistorySize = parseIntegerWithFallback(process.env.MAX_HISTORY_SIZE, DEFAULT_MAX_HISTORY);
 const enablePersistence = process.env.ENABLE_PERSISTENCE !== 'false';
 const dbPath = process.env.DB_PATH || './mcp-thinking.db';
 const enableBacktracking = process.env.ENABLE_BACKTRACKING === 'true';
-const minConfidence = parseFloat(process.env.MIN_CONFIDENCE || '0.3');
+const minConfidence = parseNumberWithFallback(process.env.MIN_CONFIDENCE, DEFAULT_MIN_CONFIDENCE);
 const enableDAG = process.env.ENABLE_DAG === 'true';
 const enableToolChains = process.env.ENABLE_TOOL_CHAINS !== 'false';
 
@@ -507,7 +529,7 @@ logger.info('Starting MCP Sequential Thinking Tools server', {
 });
 
 const thinkingServer = new ToolAwareSequentialThinkingServer({
-	available_tools: [], // TODO: Add tool discovery mechanism
+	availableTools: [], // TODO: Add tool discovery mechanism
 	maxHistorySize,
 	enablePersistence,
 	dbPath,
@@ -537,7 +559,7 @@ async function main() {
 	// Log metrics periodically (every 5 minutes)
 	const metricsInterval = setInterval(() => {
 		logger.logMetrics();
-	}, 5 * 60 * 1000);
+	}, METRICS_INTERVAL_MS);
 
 	// Clean up resources on shutdown
 	const cleanup = () => {
