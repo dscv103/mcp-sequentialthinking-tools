@@ -5,7 +5,7 @@
 
 import { ThoughtData } from './types.js';
 import { logger } from './logging.js';
-import { loadScoringConfig, ScoringConfig } from './config.js';
+import { loadScoringConfig } from './config.js';
 
 export interface BacktrackingConfig {
 	minConfidence: number;  // Minimum confidence threshold (0-1)
@@ -26,7 +26,7 @@ export interface BacktrackPoint {
 	reason: string;
 }
 
-const DEFAULT_CONFIG: BacktrackingConfig = loadScoringConfig().backtracking ?? ScoringConfig.backtracking;
+const DEFAULT_CONFIG: BacktrackingConfig = loadScoringConfig().backtracking;
 
 export class BacktrackingManager {
 	private config: BacktrackingConfig;

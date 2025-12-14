@@ -20,10 +20,9 @@ import { ToolCapabilityMatcher, enrichToolsWithCapabilities } from './tool-capab
 import { BacktrackingManager } from './backtracking.js';
 import { ThoughtDAG } from './dag.js';
 import { ToolChainLibrary } from './tool-chains.js';
-import { loadScoringConfig, ScoringConfig } from './config.js';
+import { loadScoringConfig } from './config.js';
 
 const DEFAULT_MAX_HISTORY = 1000;
-const DEFAULT_MIN_CONFIDENCE = ScoringConfig.backtracking.minConfidence;
 const METRICS_INTERVAL_MS = 5 * 60 * 1000;
 
 const parseIntegerWithFallback = (value: string | undefined, fallback: number): number => {
@@ -156,9 +155,14 @@ class ToolAwareSequentialThinkingServer {
 	private async withSessionLock<T>(sessionId: string, fn: () => Promise<T>): Promise<T> {
 		const previous = this.sessionLocks.get(sessionId) ?? Promise.resolve();
 		const run = previous.then(fn);
-		const completion = run.catch(() => {}).then(() => {});
-		let tracker: Promise<void>;
-		tracker = completion.finally(() => {
+		const completion = run.then(
+			() => undefined,
+			(error) => {
+				logger.error('Session lock task failed', error, { sessionId });
+				return undefined;
+			}
+		);
+		const tracker = completion.finally(() => {
 			if (this.sessionLocks.get(sessionId) === tracker) {
 				this.sessionLocks.delete(sessionId);
 			}
@@ -548,7 +552,10 @@ const scoringConfig = loadScoringConfig();
 const maxHistorySize = parseIntegerWithFallback(process.env.MAX_HISTORY_SIZE, DEFAULT_MAX_HISTORY);
 const enablePersistence = process.env.ENABLE_PERSISTENCE !== 'false';
 const dbPath = process.env.DB_PATH || './mcp-thinking.db';
-const enableBacktracking = process.env.ENABLE_BACKTRACKING === 'true' || scoringConfig.backtracking.enableAutoBacktrack;
+const enableBacktrackingEnv = process.env.ENABLE_BACKTRACKING;
+const enableBacktracking = enableBacktrackingEnv !== undefined
+	? enableBacktrackingEnv === 'true'
+	: scoringConfig.backtracking.enableAutoBacktrack;
 const minConfidence = scoringConfig.backtracking.minConfidence;
 const enableDAG = process.env.ENABLE_DAG === 'true';
 const enableToolChains = process.env.ENABLE_TOOL_CHAINS !== 'false';

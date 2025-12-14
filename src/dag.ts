@@ -46,7 +46,8 @@ export class ThoughtDAG {
 		}
 
 		const parentLevels = dependencies.map(dep => this.nodes.get(dep)?.level ?? 0);
-		const level = parentLevels.length > 0 ? Math.max(...parentLevels) + 1 : 0;
+		const maxParentLevel = parentLevels.reduce((max, current) => Math.max(max, current), 0);
+		const level = parentLevels.length > 0 ? maxParentLevel + 1 : 0;
 
 		const node: DAGNode = {
 			thoughtNumber: thought.thought_number,
@@ -288,13 +289,20 @@ export class ThoughtDAG {
 	 */
 	getParallelGroups(): number[][] {
 		const levels: Map<number, number> = new Map(); // thoughtNum -> level
+		const missingLevels: number[] = [];
 
 		for (const [thoughtNum, node] of this.nodes.entries()) {
 			if (node.level === undefined) {
-				const depLevels = node.dependencies.map(dep => this.nodes.get(dep)?.level ?? 0);
-				node.level = depLevels.length > 0 ? Math.max(...depLevels) + 1 : 0;
+				missingLevels.push(thoughtNum);
 			}
-			levels.set(thoughtNum, node.level);
+			levels.set(thoughtNum, node.level ?? 0);
+		}
+
+		if (missingLevels.length > 0) {
+			logger.debug('Missing cached DAG levels detected', { 
+				missingLevelCount: missingLevels.length,
+				nodes: missingLevels,
+			});
 		}
 
 		// Group by level

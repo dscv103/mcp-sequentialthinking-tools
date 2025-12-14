@@ -2,6 +2,37 @@ import { LogLevel } from './logging.js';
 
 type NumberParser = (value: string | undefined, fallback: number) => number;
 
+export interface BacktrackingScoringConfig {
+	minConfidence: number;
+	enableAutoBacktrack: boolean;
+	maxBacktrackDepth: number;
+	baseConfidence: number;
+	toolConfidenceWeight: number;
+	revisionPenalty: number;
+	branchBonus: number;
+	progressBonus: number;
+	progressThreshold: number;
+	decliningConfidenceThreshold: number;
+}
+
+export interface ToolChainScoringConfig {
+	prefixMatchWeight: number;
+	keywordMatchWeight: number;
+	highSuccessBonus: number;
+	recentUseBonus: number;
+	recentUseDaysThreshold: number;
+	highSuccessRateThreshold: number;
+	confidenceWeight: number;
+}
+
+export interface ScoringConfigShape {
+	backtracking: BacktrackingScoringConfig;
+	toolChains: ToolChainScoringConfig;
+	logging: {
+		level: LogLevel;
+	};
+}
+
 const parseNumber: NumberParser = (value, fallback) => {
 	const parsed = value !== undefined ? Number(value) : NaN;
 	return Number.isFinite(parsed) ? parsed : fallback;
@@ -12,7 +43,7 @@ const parseInteger: NumberParser = (value, fallback) => {
 	return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-export const ScoringConfig = {
+export const ScoringConfig: ScoringConfigShape = {
 	backtracking: {
 		minConfidence: 0.3,
 		enableAutoBacktrack: false,
@@ -37,9 +68,9 @@ export const ScoringConfig = {
 	logging: {
 		level: (process.env.LOG_LEVEL as LogLevel) || LogLevel.INFO,
 	},
-} as const;
+};
 
-export const loadScoringConfig = () => ({
+export const loadScoringConfig = (): ScoringConfigShape => ({
 	backtracking: {
 		minConfidence: parseNumber(process.env.MIN_CONFIDENCE, ScoringConfig.backtracking.minConfidence),
 		enableAutoBacktrack:
@@ -109,4 +140,5 @@ export const loadScoringConfig = () => ({
 			ScoringConfig.toolChains.confidenceWeight,
 		),
 	},
+	logging: ScoringConfig.logging,
 });
