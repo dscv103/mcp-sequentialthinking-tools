@@ -124,6 +124,9 @@ class ToolAwareSequentialThinkingServer {
 		});
 		
 		// Always include the sequential thinking tool
+		if (options.available_tools && !options.availableTools) {
+			logger.warn('The "available_tools" option is deprecated. Use "availableTools" instead.');
+		}
 		const providedTools = options.availableTools ?? options.available_tools ?? [];
 		const tools = [
 			SEQUENTIAL_THINKING_TOOL,
