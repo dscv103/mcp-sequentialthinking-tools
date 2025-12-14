@@ -80,7 +80,7 @@ class ToolAwareSequentialThinkingServer {
 	private toolChainLibrary: ToolChainLibrary;
 	private enableDAG: boolean;
 	private enableToolChains: boolean;
-	private sessionLocks: Map<string, Promise<void>> = new Map();
+	private sessionLocks: Map<string, Promise<unknown>> = new Map();
 	private scoringConfig = loadScoringConfig();
 
 	public getAvailableTools(): Tool[] {
@@ -155,20 +155,17 @@ class ToolAwareSequentialThinkingServer {
 	private async withSessionLock<T>(sessionId: string, fn: () => Promise<T>): Promise<T> {
 		const previous = this.sessionLocks.get(sessionId) ?? Promise.resolve();
 		const run = previous.then(fn);
-		const completion = run.then(
-			() => undefined,
-			(error) => {
-				logger.error('Session lock task failed', error, { sessionId });
-				return undefined;
-			}
-		);
-		const tracker = completion.finally(() => {
+		const trackedRun = run.catch((error) => {
+			logger.error('Session lock task failed', error, { sessionId });
+			throw error;
+		});
+		const tracker = trackedRun.finally(() => {
 			if (this.sessionLocks.get(sessionId) === tracker) {
 				this.sessionLocks.delete(sessionId);
 			}
 		});
 		this.sessionLocks.set(sessionId, tracker);
-		return run;
+		return trackedRun;
 	}
 
 	constructor(options: ServerOptions = {}) {
@@ -199,7 +196,7 @@ class ToolAwareSequentialThinkingServer {
 		this.thoughtDAG = new ThoughtDAG();
 		
 		// Initialize tool chain library
-		this.toolChainLibrary = new ToolChainLibrary();
+		this.toolChainLibrary = new ToolChainLibrary(this.scoringConfig.toolChains);
 		
 		logger.info('Server initialized', { 
 			maxHistorySize: this.maxHistorySize,

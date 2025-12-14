@@ -26,9 +26,10 @@ export class ToolChainLibrary {
 	private chains: Map<string, ToolChain> = new Map();
 	private currentChain: string[] = [];
 	private chainIdCounter = 0;
-	private scoring = loadScoringConfig().toolChains ?? ScoringConfig.toolChains;
+	private scoring: typeof ScoringConfig.toolChains;
 
-	constructor() {
+	constructor(scoring: typeof ScoringConfig.toolChains = loadScoringConfig().toolChains) {
+		this.scoring = scoring;
 		logger.info('Tool chain library initialized');
 	}
 

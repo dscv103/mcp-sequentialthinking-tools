@@ -66,7 +66,7 @@ export const ScoringConfig: ScoringConfigShape = {
 		confidenceWeight: 0.3,
 	},
 	logging: {
-		level: (process.env.LOG_LEVEL as LogLevel) || LogLevel.INFO,
+		level: LogLevel.INFO,
 	},
 };
 
@@ -76,7 +76,9 @@ export const loadScoringConfig = (): ScoringConfigShape => ({
 		enableAutoBacktrack:
 			process.env.ENABLE_BACKTRACKING === 'true'
 				? true
-				: ScoringConfig.backtracking.enableAutoBacktrack,
+				: process.env.ENABLE_BACKTRACKING === 'false'
+					? false
+					: ScoringConfig.backtracking.enableAutoBacktrack,
 		maxBacktrackDepth: parseInteger(
 			process.env.MAX_BACKTRACK_DEPTH,
 			ScoringConfig.backtracking.maxBacktrackDepth,
@@ -140,5 +142,7 @@ export const loadScoringConfig = (): ScoringConfigShape => ({
 			ScoringConfig.toolChains.confidenceWeight,
 		),
 	},
-	logging: ScoringConfig.logging,
+	logging: {
+		level: (process.env.LOG_LEVEL as LogLevel) || ScoringConfig.logging.level,
+	},
 });
