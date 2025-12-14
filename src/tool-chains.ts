@@ -4,17 +4,7 @@
  */
 
 import { logger } from './logging.js';
-
-// Scoring constants for chain matching
-const SCORING = {
-	PREFIX_MATCH_WEIGHT: 10,
-	KEYWORD_MATCH_WEIGHT: 5,
-	HIGH_SUCCESS_BONUS: 5,
-	RECENT_USE_BONUS: 3,
-	RECENT_USE_DAYS_THRESHOLD: 7,
-	HIGH_SUCCESS_RATE_THRESHOLD: 0.8,
-	CONFIDENCE_WEIGHT: 0.3, // Weight for new confidence values in rolling average
-} as const;
+import { loadScoringConfig, ScoringConfig } from './config.js';
 
 export interface ToolChain {
 	id: string;
@@ -36,6 +26,7 @@ export class ToolChainLibrary {
 	private chains: Map<string, ToolChain> = new Map();
 	private currentChain: string[] = [];
 	private chainIdCounter = 0;
+	private scoring = loadScoringConfig().toolChains ?? ScoringConfig.toolChains;
 
 	constructor() {
 		logger.info('Tool chain library initialized');
@@ -91,8 +82,8 @@ export class ToolChainLibrary {
 			if (confidence !== undefined) {
 				// Update rolling average
 				chain.averageConfidence = 
-					chain.averageConfidence * (1 - SCORING.CONFIDENCE_WEIGHT) + 
-					confidence * SCORING.CONFIDENCE_WEIGHT;
+				chain.averageConfidence * (1 - this.scoring.confidenceWeight) + 
+					confidence * this.scoring.confidenceWeight;
 			}
 			chain.lastUsed = new Date().toISOString();
 			
@@ -158,7 +149,7 @@ export class ToolChainLibrary {
 				);
 				
 				if (matchLength > 0) {
-					matchScore += matchLength * SCORING.PREFIX_MATCH_WEIGHT;
+					matchScore += matchLength * this.scoring.prefixMatchWeight;
 					reasons.push(`Matches ${matchLength} previous tools`);
 				}
 			}
@@ -171,22 +162,22 @@ export class ToolChainLibrary {
 				);
 				
 				if (matchingKeywords.length > 0) {
-					matchScore += matchingKeywords.length * SCORING.KEYWORD_MATCH_WEIGHT;
+					matchScore += matchingKeywords.length * this.scoring.keywordMatchWeight;
 					reasons.push(`Context matches: ${matchingKeywords.join(', ')}`);
 				}
 			}
 
 			// Bonus for high success rate
-			if (successRate > SCORING.HIGH_SUCCESS_RATE_THRESHOLD) {
-				matchScore += SCORING.HIGH_SUCCESS_BONUS;
+			if (successRate > this.scoring.highSuccessRateThreshold) {
+				matchScore += this.scoring.highSuccessBonus;
 				reasons.push('High success rate');
 			}
 
 			// Bonus for recent use
 			const daysSinceUse = (Date.now() - new Date(chain.lastUsed).getTime()) 
 				/ (1000 * 60 * 60 * 24);
-			if (daysSinceUse < SCORING.RECENT_USE_DAYS_THRESHOLD) {
-				matchScore += SCORING.RECENT_USE_BONUS;
+			if (daysSinceUse < this.scoring.recentUseDaysThreshold) {
+				matchScore += this.scoring.recentUseBonus;
 				reasons.push('Recently used');
 			}
 

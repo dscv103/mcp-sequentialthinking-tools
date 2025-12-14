@@ -5,11 +5,19 @@
 
 import { ThoughtData } from './types.js';
 import { logger } from './logging.js';
+import { loadScoringConfig, ScoringConfig } from './config.js';
 
 export interface BacktrackingConfig {
 	minConfidence: number;  // Minimum confidence threshold (0-1)
 	enableAutoBacktrack: boolean;  // Automatically backtrack on low confidence
 	maxBacktrackDepth: number;  // Maximum number of thoughts to backtrack
+	baseConfidence: number;  // Starting confidence baseline
+	toolConfidenceWeight: number;  // Weight for tool recommendation confidence
+	revisionPenalty: number;  // Penalty applied for revisions
+	branchBonus: number;  // Bonus applied for branching
+	progressBonus: number;  // Bonus for late-stage confidence
+	progressThreshold: number;  // Threshold to apply progress bonus
+	decliningConfidenceThreshold: number;  // Threshold for declining confidence trend
 }
 
 export interface BacktrackPoint {
@@ -18,11 +26,7 @@ export interface BacktrackPoint {
 	reason: string;
 }
 
-const DEFAULT_CONFIG: BacktrackingConfig = {
-	minConfidence: 0.3,
-	enableAutoBacktrack: false,
-	maxBacktrackDepth: 5,
-};
+const DEFAULT_CONFIG: BacktrackingConfig = loadScoringConfig().backtracking ?? ScoringConfig.backtracking;
 
 export class BacktrackingManager {
 	private config: BacktrackingConfig;
@@ -117,38 +121,33 @@ export class BacktrackingManager {
 	 * Uses multiple factors to determine confidence
 	 */
 	calculateConfidence(thought: ThoughtData): number {
-		let confidence = 0.5; // Start with neutral confidence
-		let factors = 0;
+		let confidence = this.config.baseConfidence;
 
 		// Factor 1: Tool recommendations confidence
 		if (thought.current_step?.recommended_tools) {
 			const toolConfidences = thought.current_step.recommended_tools.map(t => t.confidence);
 			if (toolConfidences.length > 0) {
 				const avgToolConfidence = toolConfidences.reduce((a, b) => a + b, 0) / toolConfidences.length;
-				confidence += avgToolConfidence * 0.3;
-				factors++;
+				confidence += avgToolConfidence * this.config.toolConfidenceWeight;
 			}
 		}
 
 		// Factor 2: Revision indicates uncertainty
 		if (thought.is_revision) {
-			confidence -= 0.1;
-			factors++;
+			confidence -= this.config.revisionPenalty;
 		}
 
 		// Factor 3: Branching indicates exploration (neutral to slightly positive)
 		if (thought.branch_from_thought) {
-			confidence += 0.05;
-			factors++;
+			confidence += this.config.branchBonus;
 		}
 
 		// Factor 4: Progress toward goal
 		if (thought.thought_number && thought.total_thoughts) {
 			const progress = thought.thought_number / thought.total_thoughts;
 			// Later thoughts with clear next steps are more confident
-			if (!thought.next_thought_needed && progress > 0.8) {
-				confidence += 0.2;
-				factors++;
+			if (!thought.next_thought_needed && progress > this.config.progressThreshold) {
+				confidence += this.config.progressBonus;
 			}
 		}
 
@@ -245,7 +244,7 @@ export class BacktrackingManager {
 				idx === 0 || val < recentThree[idx - 1]
 			);
 
-			if (isDecreasing && recentThree[recentThree.length - 1] < 0.5) {
+			if (isDecreasing && recentThree[recentThree.length - 1] < this.config.decliningConfidenceThreshold) {
 				return {
 					shouldContinue: false,
 					reason: 'Declining confidence trend detected',

@@ -11,6 +11,7 @@ export interface DAGNode {
 	thought: ThoughtData;
 	dependencies: number[]; // Thought numbers this depends on
 	children: number[]; // Thought numbers that depend on this
+	level?: number;
 	status: 'pending' | 'ready' | 'executing' | 'completed' | 'failed';
 	result?: unknown;
 	error?: string;
@@ -44,11 +45,15 @@ export class ThoughtDAG {
 			dependencies.push(thought.thought_number - 1);
 		}
 
+		const parentLevels = dependencies.map(dep => this.nodes.get(dep)?.level ?? 0);
+		const level = parentLevels.length > 0 ? Math.max(...parentLevels) + 1 : 0;
+
 		const node: DAGNode = {
 			thoughtNumber: thought.thought_number,
 			thought,
 			dependencies,
 			children: [],
+			level,
 			status: dependencies.length === 0 ? 'ready' : 'pending',
 		};
 
@@ -65,6 +70,7 @@ export class ThoughtDAG {
 		logger.debug('Thought added to DAG', {
 			thoughtNumber: thought.thought_number,
 			dependencies,
+			level,
 			status: node.status,
 		});
 	}
@@ -282,48 +288,14 @@ export class ThoughtDAG {
 	 */
 	getParallelGroups(): number[][] {
 		const levels: Map<number, number> = new Map(); // thoughtNum -> level
-		
-		// Calculate level for each node iteratively to avoid stack overflow
-		const calculateLevels = () => {
-			// Start with nodes that have no dependencies
-			const queue: number[] = [];
-			for (const [thoughtNum, node] of this.nodes.entries()) {
-				if (node.dependencies.length === 0) {
-					levels.set(thoughtNum, 0);
-					queue.push(thoughtNum);
-				}
+
+		for (const [thoughtNum, node] of this.nodes.entries()) {
+			if (node.level === undefined) {
+				const depLevels = node.dependencies.map(dep => this.nodes.get(dep)?.level ?? 0);
+				node.level = depLevels.length > 0 ? Math.max(...depLevels) + 1 : 0;
 			}
-
-			// Process queue
-			while (queue.length > 0) {
-				const current = queue.shift()!;
-
-				// Update children
-				const node = this.nodes.get(current);
-				if (node) {
-					for (const childNum of node.children) {
-						const childNode = this.nodes.get(childNum);
-						if (!childNode) continue;
-
-						// Check if all dependencies are processed
-						const allDepsProcessed = childNode.dependencies.every(dep => 
-							levels.has(dep)
-						);
-
-						if (allDepsProcessed) {
-							// Calculate max level from all dependencies
-							const maxDepLevel = Math.max(
-								...childNode.dependencies.map(dep => levels.get(dep) || 0)
-							);
-							levels.set(childNum, maxDepLevel + 1);
-							queue.push(childNum);
-						}
-					}
-				}
-			}
-		};
-
-		calculateLevels();
+			levels.set(thoughtNum, node.level);
+		}
 
 		// Group by level
 		const groups: Map<number, number[]> = new Map();
