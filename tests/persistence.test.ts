@@ -12,13 +12,21 @@ const setupPersistence = () => {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-persistence-'));
 	const dbPath = path.join(dir, 'test.db');
 	const persistence = new PersistenceLayer({ dbPath });
+	let closed = false;
+
+	const close = () => {
+		if (!closed) {
+			persistence.close();
+			closed = true;
+		}
+	};
 
 	const cleanup = () => {
-		persistence.close();
+		close();
 		fs.rmSync(dir, { recursive: true, force: true });
 	};
 
-	return { persistence, dbPath, cleanup };
+	return { persistence, dbPath, cleanup, close };
 };
 
 const baseThought = (overrides: Partial<ThoughtData>): ThoughtData => ({
@@ -35,6 +43,15 @@ describe('PersistenceLayer.getThoughtHistory', () => {
 		const { persistence, cleanup } = setupPersistence();
 
 		const result = await persistence.getThoughtHistory();
+		assert.deepStrictEqual(result, []);
+
+		cleanup();
+	});
+
+	it('returns an empty array when session has no thoughts', async () => {
+		const { persistence, cleanup } = setupPersistence();
+
+		const result = await persistence.getThoughtHistory('unknown-session');
 		assert.deepStrictEqual(result, []);
 
 		cleanup();
@@ -151,11 +168,46 @@ describe('PersistenceLayer.getThoughtHistory', () => {
 
 		cleanup();
 	});
+
+	it('handles malformed JSON gracefully and defaults values', async () => {
+		const { persistence, dbPath, cleanup, close } = setupPersistence();
+		const sessionId = 'session-json';
+
+		const thought: ThoughtData = baseThought({
+			thought: 'bad-json',
+			thought_number: 1,
+			total_thoughts: 1,
+			available_mcp_tools: ['tool-a'],
+		});
+
+		await persistence.saveThought(thought, sessionId);
+		close();
+
+		const db = new Database(dbPath);
+		db.prepare('UPDATE thoughts SET available_mcp_tools = ? WHERE session_id = ?').run('not-json', sessionId);
+		db.close();
+
+		const errors: string[] = [];
+		const originalError = console.error;
+		console.error = (...args: unknown[]) => {
+			errors.push(args.join(' '));
+		};
+
+		const reader = new PersistenceLayer({ dbPath });
+		const history = await reader.getThoughtHistory(sessionId);
+		reader.close();
+		console.error = originalError;
+		cleanup();
+
+		assert.strictEqual(history.length, 1);
+		assert.deepStrictEqual(history[0].available_mcp_tools, []);
+		assert.ok(errors.some(msg => msg.includes('Failed to parse JSON field during rehydration')));
+	});
 });
 
 describe('PersistenceLayer.clearHistory', () => {
 	it('removes thoughts, steps, and tools for a session', async () => {
-		const { persistence, dbPath, cleanup } = setupPersistence();
+		const { persistence, dbPath, cleanup, close } = setupPersistence();
 		const sessionA = 'session-a';
 		const sessionB = 'session-b';
 
@@ -178,6 +230,7 @@ describe('PersistenceLayer.clearHistory', () => {
 		await persistence.saveThought({ ...thought, thought_number: 2 }, sessionB);
 
 		await persistence.clearHistory(sessionA);
+		close();
 
 		const db = new Database(dbPath);
 
@@ -218,5 +271,41 @@ describe('PersistenceLayer.clearHistory', () => {
 		assert.strictEqual(thoughtCountB, 1);
 		assert.strictEqual(stepCountB, 1);
 		assert.strictEqual(toolCountB, 1);
+	});
+
+	it('clears all history when called without a session', async () => {
+		const { persistence, dbPath, cleanup, close } = setupPersistence();
+
+		const thought: ThoughtData = baseThought({
+			current_step: {
+				step_description: 'step',
+				expected_outcome: 'outcome',
+				recommended_tools: [
+					{
+						tool_name: 'tool-x',
+						confidence: 1,
+						rationale: 'reason',
+						priority: 1,
+					},
+				],
+			},
+		});
+
+		await persistence.saveThought(thought, 'session-a');
+		await persistence.saveThought({ ...thought, thought_number: 2 }, 'session-b');
+
+		await persistence.clearHistory();
+		close();
+
+		const db = new Database(dbPath);
+		const thoughts = db.prepare('SELECT COUNT(*) as count FROM thoughts').get().count as number;
+		const steps = db.prepare('SELECT COUNT(*) as count FROM step_recommendations').get().count as number;
+		const tools = db.prepare('SELECT COUNT(*) as count FROM tool_recommendations').get().count as number;
+		db.close();
+		cleanup();
+
+		assert.strictEqual(thoughts, 0);
+		assert.strictEqual(steps, 0);
+		assert.strictEqual(tools, 0);
 	});
 });
