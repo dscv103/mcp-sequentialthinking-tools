@@ -1,11 +1,219 @@
-# Test Results: MCP Sequential Thinking Prompts
-
-| Scenario | Status | Details |
-|---|---|---|
-| 1. Basic Initialization | ✅ Passed | |
-| 2. Step-by-Step Progression | ✅ Passed | |
-| 3. Dynamic Tool Recommendation | ✅ Passed | |
-| 4. Revision | ✅ Passed | |
-| 5. Branching | ✅ Passed | |
-| 6. Changing Total Thoughts | ✅ Passed | |
-| 7. Confidence Scoring | ✅ Passed | |
+TAP version 13
+# {"timestamp":"2025-12-15T07:43:37.797Z","level":"info","message":"Persistence layer initialized","metadata":{"dbPath":"./test_complex_db.json"}}
+# {"timestamp":"2025-12-15T07:43:37.798Z","level":"info","message":"Backtracking manager initialized","metadata":{"minConfidence":0.3,"enableAutoBacktrack":true,"maxBacktrackDepth":5}}
+# {"timestamp":"2025-12-15T07:43:37.798Z","level":"info","message":"Tool chain library initialized"}
+# {"timestamp":"2025-12-15T07:43:37.798Z","level":"info","message":"Server initialized","metadata":{"maxHistorySize":1000,"sessionId":"session-1765784617735","persistenceEnabled":true,"backtrackingEnabled":true,"dagEnabled":true,"toolChainsEnabled":true}}
+# {"timestamp":"2025-12-15T07:43:37.798Z","level":"info","message":"Tools enriched with capabilities","metadata":{"enrichedCount":1,"totalTools":1}}
+# {"timestamp":"2025-12-15T07:43:37.799Z","level":"info","message":"Tools initialized","metadata":{"toolCount":1,"tools":["sequentialthinking_tools"],"categories":["search"],"tags":["read"]}}
+# {"timestamp":"2025-12-15T07:43:37.802Z","level":"info","message":"Parallel execution groups calculated","metadata":{"groupCount":1,"groups":[[1]]}}
+# {"timestamp":"2025-12-15T07:43:37.807Z","level":"info","message":"\\n┌───────────────────────────────────────────────────────────────────┐\\n│ 💭 Thought 1/10                                                   │\\n├───────────────────────────────────────────────────────────────────┤\\n│ Starting maze exploration. I see paths Left, Right, and Straight. │\\n└───────────────────────────────────────────────────────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.807Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":1,"historyLength":1,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.808Z","level":"info","message":"Parallel execution groups calculated","metadata":{"groupCount":2,"groups":[[1],[2]]}}
+# {"timestamp":"2025-12-15T07:43:37.812Z","level":"info","message":"\\n┌──────────────────────────────────────────────────┐\\n│ 🌿 Branch 2/10 (from thought 1, ID: branch-left) │\\n├──────────────────────────────────────────────────┤\\n│ I will go Left.                                  │\\n└──────────────────────────────────────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.812Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":2,"historyLength":2,"confidence":0.55}}
+# {"timestamp":"2025-12-15T07:43:37.812Z","level":"info","message":"Parallel execution groups calculated","metadata":{"groupCount":3,"groups":[[1],[2],[3]]}}
+# {"timestamp":"2025-12-15T07:43:37.816Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 3/10  │\\n├──────────────────┤\\n│ It's a dead end. │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.816Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":3,"historyLength":3,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.817Z","level":"info","message":"Parallel execution groups calculated","metadata":{"groupCount":3,"groups":[[1],[2,4],[3]]}}
+# {"timestamp":"2025-12-15T07:43:37.821Z","level":"info","message":"\\n┌───────────────────────────────────────────────────┐\\n│ 🌿 Branch 4/10 (from thought 1, ID: branch-right) │\\n├───────────────────────────────────────────────────┤\\n│ Going back to start. Now checking Right.          │\\n└───────────────────────────────────────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.821Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":4,"historyLength":4,"confidence":0.55}}
+# {"timestamp":"2025-12-15T07:43:37.821Z","level":"info","message":"Parallel execution groups calculated","metadata":{"groupCount":3,"groups":[[1],[2,4],[3,5]]}}
+# {"timestamp":"2025-12-15T07:43:37.825Z","level":"info","message":"\\n┌─────────────────┐\\n│ 💭 Thought 5/10 │\\n├─────────────────┤\\n│ Found the exit! │\\n└─────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.825Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":5,"historyLength":5,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.825Z","level":"info","message":"Database connection closed"}
+# {"timestamp":"2025-12-15T07:43:37.825Z","level":"info","message":"Server shutdown complete"}
+# {"timestamp":"2025-12-15T07:43:37.857Z","level":"info","message":"Persistence layer initialized","metadata":{"dbPath":"./test_complex_db.json"}}
+# {"timestamp":"2025-12-15T07:43:37.857Z","level":"info","message":"Backtracking manager initialized","metadata":{"minConfidence":0.3,"enableAutoBacktrack":true,"maxBacktrackDepth":5}}
+# {"timestamp":"2025-12-15T07:43:37.857Z","level":"info","message":"Tool chain library initialized"}
+# {"timestamp":"2025-12-15T07:43:37.857Z","level":"info","message":"Server initialized","metadata":{"maxHistorySize":1000,"sessionId":"session-1765784617827","persistenceEnabled":true,"backtrackingEnabled":true,"dagEnabled":false,"toolChainsEnabled":true}}
+# {"timestamp":"2025-12-15T07:43:37.857Z","level":"info","message":"Tools initialized","metadata":{"toolCount":1,"tools":["sequentialthinking_tools"],"categories":["search"],"tags":["read"]}}
+# {"timestamp":"2025-12-15T07:43:37.862Z","level":"info","message":"\\n┌────────────────────────────┐\\n│ 💭 Thought 1/3             │\\n├────────────────────────────┤\\n│ I need to calculate 2 + 2. │\\n└────────────────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.862Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":1,"historyLength":1,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.866Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 2/3   │\\n├──────────────────┤\\n│ The answer is 5. │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.866Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":2,"historyLength":2,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.871Z","level":"info","message":"\\n┌─────────────────────────────────────────────────────────┐\\n│ 🔄 Revision 3/4 (revising thought 2)                    │\\n├─────────────────────────────────────────────────────────┤\\n│ Wait, I made a mistake. 2 + 2 is 4. Revising thought 2. │\\n└─────────────────────────────────────────────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.871Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":3,"historyLength":3,"confidence":0.4}}
+# {"timestamp":"2025-12-15T07:43:37.871Z","level":"info","message":"Database connection closed"}
+# {"timestamp":"2025-12-15T07:43:37.871Z","level":"info","message":"Server shutdown complete"}
+# {"timestamp":"2025-12-15T07:43:37.872Z","level":"info","message":"Backtracking manager initialized","metadata":{"minConfidence":0.3,"enableAutoBacktrack":false,"maxBacktrackDepth":5}}
+# {"timestamp":"2025-12-15T07:43:37.872Z","level":"info","message":"Tool chain library initialized"}
+# {"timestamp":"2025-12-15T07:43:37.872Z","level":"info","message":"Server initialized","metadata":{"maxHistorySize":10,"sessionId":"session-1765784617872","persistenceEnabled":false,"backtrackingEnabled":false,"dagEnabled":false,"toolChainsEnabled":true}}
+# {"timestamp":"2025-12-15T07:43:37.872Z","level":"info","message":"Tools initialized","metadata":{"toolCount":1,"tools":["sequentialthinking_tools"],"categories":["search"],"tags":["read"]}}
+# {"timestamp":"2025-12-15T07:43:37.872Z","level":"info","message":"\\n┌─────────────────┐\\n│ 💭 Thought 1/50 │\\n├─────────────────┤\\n│ Iteration 1     │\\n└─────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.872Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":1,"historyLength":1,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.872Z","level":"info","message":"\\n┌─────────────────┐\\n│ 💭 Thought 2/50 │\\n├─────────────────┤\\n│ Iteration 2     │\\n└─────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.872Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":2,"historyLength":2,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.872Z","level":"info","message":"\\n┌─────────────────┐\\n│ 💭 Thought 3/50 │\\n├─────────────────┤\\n│ Iteration 3     │\\n└─────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.872Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":3,"historyLength":3,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.873Z","level":"info","message":"\\n┌─────────────────┐\\n│ 💭 Thought 4/50 │\\n├─────────────────┤\\n│ Iteration 4     │\\n└─────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.873Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":4,"historyLength":4,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.873Z","level":"info","message":"\\n┌─────────────────┐\\n│ 💭 Thought 5/50 │\\n├─────────────────┤\\n│ Iteration 5     │\\n└─────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.873Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":5,"historyLength":5,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.873Z","level":"info","message":"\\n┌─────────────────┐\\n│ 💭 Thought 6/50 │\\n├─────────────────┤\\n│ Iteration 6     │\\n└─────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.873Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":6,"historyLength":6,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.873Z","level":"info","message":"\\n┌─────────────────┐\\n│ 💭 Thought 7/50 │\\n├─────────────────┤\\n│ Iteration 7     │\\n└─────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.873Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":7,"historyLength":7,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.873Z","level":"info","message":"\\n┌─────────────────┐\\n│ 💭 Thought 8/50 │\\n├─────────────────┤\\n│ Iteration 8     │\\n└─────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.873Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":8,"historyLength":8,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.873Z","level":"info","message":"\\n┌─────────────────┐\\n│ 💭 Thought 9/50 │\\n├─────────────────┤\\n│ Iteration 9     │\\n└─────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.873Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":9,"historyLength":9,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.874Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 10/50 │\\n├──────────────────┤\\n│ Iteration 10     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.874Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":10,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.874Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.874Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 11/50 │\\n├──────────────────┤\\n│ Iteration 11     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.874Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":11,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.874Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.874Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 12/50 │\\n├──────────────────┤\\n│ Iteration 12     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.874Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":12,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.874Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.874Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 13/50 │\\n├──────────────────┤\\n│ Iteration 13     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.874Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":13,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.874Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.874Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 14/50 │\\n├──────────────────┤\\n│ Iteration 14     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.874Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":14,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.874Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.874Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 15/50 │\\n├──────────────────┤\\n│ Iteration 15     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.874Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":15,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.875Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.875Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 16/50 │\\n├──────────────────┤\\n│ Iteration 16     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.875Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":16,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.875Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.875Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 17/50 │\\n├──────────────────┤\\n│ Iteration 17     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.875Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":17,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.875Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.875Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 18/50 │\\n├──────────────────┤\\n│ Iteration 18     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.875Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":18,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.875Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.875Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 19/50 │\\n├──────────────────┤\\n│ Iteration 19     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.875Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":19,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.875Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.875Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 20/50 │\\n├──────────────────┤\\n│ Iteration 20     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.875Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":20,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.875Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.875Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 21/50 │\\n├──────────────────┤\\n│ Iteration 21     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.875Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":21,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.876Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.876Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 22/50 │\\n├──────────────────┤\\n│ Iteration 22     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.876Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":22,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.876Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.876Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 23/50 │\\n├──────────────────┤\\n│ Iteration 23     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.876Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":23,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.876Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.876Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 24/50 │\\n├──────────────────┤\\n│ Iteration 24     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.876Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":24,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.876Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.876Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 25/50 │\\n├──────────────────┤\\n│ Iteration 25     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.876Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":25,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.876Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.876Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 26/50 │\\n├──────────────────┤\\n│ Iteration 26     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.876Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":26,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.876Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.876Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 27/50 │\\n├──────────────────┤\\n│ Iteration 27     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.876Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":27,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.876Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.876Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 28/50 │\\n├──────────────────┤\\n│ Iteration 28     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":28,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 29/50 │\\n├──────────────────┤\\n│ Iteration 29     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":29,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 30/50 │\\n├──────────────────┤\\n│ Iteration 30     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":30,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 31/50 │\\n├──────────────────┤\\n│ Iteration 31     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":31,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 32/50 │\\n├──────────────────┤\\n│ Iteration 32     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":32,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 33/50 │\\n├──────────────────┤\\n│ Iteration 33     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":33,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 34/50 │\\n├──────────────────┤\\n│ Iteration 34     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":34,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 35/50 │\\n├──────────────────┤\\n│ Iteration 35     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":35,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.877Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 36/50 │\\n├──────────────────┤\\n│ Iteration 36     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":36,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 37/50 │\\n├──────────────────┤\\n│ Iteration 37     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":37,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 38/50 │\\n├──────────────────┤\\n│ Iteration 38     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":38,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 39/50 │\\n├──────────────────┤\\n│ Iteration 39     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":39,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 40/50 │\\n├──────────────────┤\\n│ Iteration 40     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":40,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 41/50 │\\n├──────────────────┤\\n│ Iteration 41     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":41,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 42/50 │\\n├──────────────────┤\\n│ Iteration 42     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":42,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 43/50 │\\n├──────────────────┤\\n│ Iteration 43     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":43,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 44/50 │\\n├──────────────────┤\\n│ Iteration 44     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.878Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":44,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.879Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.879Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 45/50 │\\n├──────────────────┤\\n│ Iteration 45     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.879Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":45,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.879Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.879Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 46/50 │\\n├──────────────────┤\\n│ Iteration 46     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.879Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":46,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.879Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.879Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 47/50 │\\n├──────────────────┤\\n│ Iteration 47     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.879Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":47,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.879Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.879Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 48/50 │\\n├──────────────────┤\\n│ Iteration 48     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.879Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":48,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.880Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.880Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 49/50 │\\n├──────────────────┤\\n│ Iteration 49     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.880Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":49,"historyLength":10,"confidence":0.5}}
+# {"timestamp":"2025-12-15T07:43:37.880Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.880Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 50/50 │\\n├──────────────────┤\\n│ Iteration 50     │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.880Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":50,"historyLength":10,"confidence":0.7}}
+# {"timestamp":"2025-12-15T07:43:37.880Z","level":"warn","message":"History trimmed","metadata":{"maxSize":10}}
+# {"timestamp":"2025-12-15T07:43:37.880Z","level":"info","message":"\\n┌──────────────────┐\\n│ 💭 Thought 51/51 │\\n├──────────────────┤\\n│ Final check      │\\n└──────────────────┘"}
+# {"timestamp":"2025-12-15T07:43:37.880Z","level":"info","message":"Thought processed successfully","metadata":{"thoughtNumber":51,"historyLength":10,"confidence":0.7}}
+# {"timestamp":"2025-12-15T07:43:37.880Z","level":"info","message":"Server shutdown complete"}
+# Subtest: Complex Scenarios Suite
+    # Subtest: Scenario 1: The Branching Tree (Maze)
+    ok 1 - Scenario 1: The Branching Tree (Maze)
+      ---
+      duration_ms: 92.212558
+      type: 'test'
+      ...
+    # Subtest: Scenario 2: The Correction Loop (Revisions)
+    ok 2 - Scenario 2: The Correction Loop (Revisions)
+      ---
+      duration_ms: 44.291483
+      type: 'test'
+      ...
+    # Subtest: Scenario 3: Stress Test (History Limit)
+    ok 3 - Scenario 3: Stress Test (History Limit)
+      ---
+      duration_ms: 8.855137
+      type: 'test'
+      ...
+    1..3
+ok 1 - Complex Scenarios Suite
+  ---
+  duration_ms: 146.590456
+  type: 'test'
+  ...
+1..1
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 440.663845
