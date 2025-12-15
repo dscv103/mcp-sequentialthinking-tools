@@ -5,7 +5,7 @@ import {
 	ScoringConfigShape,
 	ToolChainScoringConfig,
 } from './config-constants.js';
-import { LogLevel } from './logging.js';
+import { LogLevel, logger } from './logging.js';
 
 type NumberParser = (value: string | undefined, fallback: number) => number;
 
@@ -19,7 +19,7 @@ const parseInteger: NumberParser = (value, fallback) => {
 	return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-const clamp = (value: number, min: number, max: number): number =>
+export const clampValue = (value: number, min: number, max: number): number =>
 	Math.min(Math.max(value, min), max);
 
 const backtrackingSchema = v.object({
@@ -55,14 +55,14 @@ const scoringSchema = v.object({
 
 const sanitizeBacktracking = (config: BacktrackingScoringConfig): BacktrackingScoringConfig => ({
 	...config,
-	minConfidence: clamp(config.minConfidence, 0, 1),
-	baseConfidence: clamp(config.baseConfidence, 0, 1),
-	toolConfidenceWeight: clamp(config.toolConfidenceWeight, 0, 1),
-	revisionPenalty: clamp(config.revisionPenalty, 0, 1),
-	branchBonus: clamp(config.branchBonus, 0, 1),
-	progressBonus: clamp(config.progressBonus, 0, 1),
-	progressThreshold: clamp(config.progressThreshold, 0, 1),
-	decliningConfidenceThreshold: clamp(config.decliningConfidenceThreshold, 0, 1),
+	minConfidence: clampValue(config.minConfidence, 0, 1),
+	baseConfidence: clampValue(config.baseConfidence, 0, 1),
+	toolConfidenceWeight: clampValue(config.toolConfidenceWeight, 0, 1),
+	revisionPenalty: clampValue(config.revisionPenalty, 0, 1),
+	branchBonus: clampValue(config.branchBonus, 0, 1),
+	progressBonus: clampValue(config.progressBonus, 0, 1),
+	progressThreshold: clampValue(config.progressThreshold, 0, 1),
+	decliningConfidenceThreshold: clampValue(config.decliningConfidenceThreshold, 0, 1),
 	maxBacktrackDepth: Math.max(1, Math.floor(config.maxBacktrackDepth)),
 });
 
@@ -73,8 +73,8 @@ const sanitizeToolChain = (config: ToolChainScoringConfig): ToolChainScoringConf
 	highSuccessBonus: Math.max(0, config.highSuccessBonus),
 	recentUseBonus: Math.max(0, config.recentUseBonus),
 	recentUseDaysThreshold: Math.max(1, Math.floor(config.recentUseDaysThreshold)),
-	highSuccessRateThreshold: clamp(config.highSuccessRateThreshold, 0, 1),
-	confidenceWeight: clamp(config.confidenceWeight, 0, 1),
+	highSuccessRateThreshold: clampValue(config.highSuccessRateThreshold, 0, 1),
+	confidenceWeight: clampValue(config.confidenceWeight, 0, 1),
 });
 
 const validateScoringConfig = (config: ScoringConfigShape): ScoringConfigShape => {
@@ -82,6 +82,10 @@ const validateScoringConfig = (config: ScoringConfigShape): ScoringConfigShape =
 	if (result.success) {
 		return result.output;
 	}
+
+	logger.warn('Scoring configuration validation failed, applying sanitized defaults', {
+		issues: result.issues?.map(issue => issue.message) ?? ['unknown validation error'],
+	});
 
 	// Fall back to sanitized defaults while preserving valid overrides
 	return {

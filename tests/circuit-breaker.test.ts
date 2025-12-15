@@ -10,12 +10,12 @@ test('CircuitBreaker opens after repeated failures', async () => {
 		name: 'test-breaker',
 	});
 
-await assert.rejects(
-	() => breaker.execute(async () => {
-		throw new Error('fail');
-	}),
-	Error,
-);
+	await assert.rejects(
+		() => breaker.execute(async () => {
+			throw new Error('fail');
+		}),
+		Error,
+	);
 
 	await assert.rejects(
 		() => breaker.execute(async () => 'ok'),

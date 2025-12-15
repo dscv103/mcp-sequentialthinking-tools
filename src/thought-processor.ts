@@ -24,12 +24,14 @@ export interface ThoughtProcessorDeps {
 export class ThoughtProcessor {
 	private thoughtHistory: ThoughtData[] = [];
 	private branches: Record<string, ThoughtData[]> = {};
+	private formatCache: Map<string, string> = new Map();
 
 	constructor(private readonly deps: ThoughtProcessorDeps) {}
 
 	clear(): void {
 		this.thoughtHistory = [];
 		this.branches = {};
+		this.formatCache.clear();
 		this.deps.backtrackingManager.clear();
 		this.deps.thoughtDAG.clear();
 		this.deps.toolChainLibrary.clear();
@@ -45,8 +47,10 @@ export class ThoughtProcessor {
 				const inputs = tool.suggested_inputs 
 					? `\n    Suggested inputs: ${JSON.stringify(tool.suggested_inputs)}`
 					: '';
-				return `  - ${tool.tool_name} (priority: ${tool.priority})${alternatives}
-    Rationale: ${tool.rationale}${inputs}`;
+				return [
+					`  - ${tool.tool_name} (priority: ${tool.priority})${alternatives}`,
+					`    Rationale: ${tool.rationale}${inputs}`,
+				].join('\n');
 			})
 			.join('\n');
 
@@ -86,23 +90,43 @@ Expected Outcome: ${step.expected_outcome}${
 			context = '';
 		}
 
-		const header = `${prefix} ${thought_number}/${total_thoughts}${context}`;
-		let content = thought;
+		const cacheKey = [
+			thought_number,
+			total_thoughts,
+			thought,
+			current_step?.step_description ?? '',
+			current_step?.expected_outcome ?? '',
+		].join('|');
 
-		if (current_step) {
-			content = `${thought}\n\nRecommendation:\n${this.formatRecommendation(current_step)}`;
+		const cached = this.formatCache.get(cacheKey);
+		if (cached) {
+			return cached;
 		}
 
-		const border = '─'.repeat(
-			Math.max(header.length, content.length) + 4,
-		);
+		const header = `${prefix} ${thought_number}/${total_thoughts}${context}`;
+		const content = current_step
+			? `${thought}\n\nRecommendation:\n${this.formatRecommendation(current_step)}`
+			: thought;
 
-		return `
+		const lines = [header, ...content.split('\n')];
+		const innerWidth = lines.reduce((max, line) => Math.max(max, line.length), 0);
+		const border = '─'.repeat(innerWidth + 2);
+		const formatLine = (line: string) => `│ ${line.padEnd(innerWidth)} │`;
+
+		const formattedContent = content
+			.split('\n')
+			.map(formatLine)
+			.join('\n');
+
+		const formatted = `
 ┌${border}┐
-│ ${header} │
+${formatLine(header)}
 ├${border}┤
-│ ${content.padEnd(border.length - 2)} │
+${formattedContent}
 └${border}┘`;
+
+		this.formatCache.set(cacheKey, formatted);
+		return formatted;
 	}
 
 	private prepareThought(input: ThoughtData): ThoughtData {

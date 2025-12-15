@@ -23,6 +23,13 @@ export interface DAGExecutionResult {
 	totalDuration: number;
 }
 
+export class DagCycleError extends Error {
+	constructor(thoughtNumber: number) {
+		super(`Cycle detected in DAG at thought ${thoughtNumber}`);
+		this.name = 'DagCycleError';
+	}
+}
+
 export class ThoughtDAG {
 	private nodes: Map<number, DAGNode> = new Map();
 	private executionOrder: number[] = [];
@@ -303,7 +310,7 @@ export class ThoughtDAG {
 	 */
 	getParallelGroups(): number[][] {
 		if (!this.cacheDirty && this.parallelGroupsCache) {
-			return this.parallelGroupsCache.map(group => [...group]);
+			return this.parallelGroupsCache;
 		}
 
 		const levels: Map<number, number> = new Map();
@@ -316,7 +323,7 @@ export class ThoughtDAG {
 
 			if (visiting.has(thoughtNum)) {
 				logger.warn('Cycle detected while computing parallel groups', { thoughtNum });
-				return 0;
+				throw new DagCycleError(thoughtNum);
 			}
 
 			visiting.add(thoughtNum);
@@ -363,10 +370,11 @@ export class ThoughtDAG {
 			groups: result,
 		});
 
-		this.parallelGroupsCache = result.map(group => [...group]);
+		const frozenGroups = result.map(group => Object.freeze([...group]));
+		this.parallelGroupsCache = Object.freeze(frozenGroups) as unknown as number[][];
 		this.cacheDirty = false;
 
-		return result;
+		return this.parallelGroupsCache;
 	}
 
 	/**

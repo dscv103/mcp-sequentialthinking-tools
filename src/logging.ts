@@ -40,6 +40,9 @@ const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
 	[LogLevel.ERROR]: 3,
 };
 
+const isValidLogFormat = (format: string): format is 'json' | 'pretty' =>
+	format === 'json' || format === 'pretty';
+
 class Logger {
 	private config: LoggerConfig;
 	private metrics: Map<string, { count: number; totalDuration: number }> = new Map();
@@ -97,10 +100,14 @@ class Logger {
 
 		this.logCounts[entry.level]++;
 
-		for (const format of this.config.outputFormats) {
-			const formatted = this.formatEntry(entry, format);
-			for (const sink of this.sinks) {
-				sink.write(entry, formatted);
+		const formattedEntries = this.config.outputFormats.map(format => ({
+			format,
+			content: this.formatEntry(entry, format),
+		}));
+
+		for (const sink of this.sinks) {
+			for (const formatted of formattedEntries) {
+				sink.write(entry, formatted.content);
 			}
 		}
 	}
@@ -202,11 +209,11 @@ class Logger {
 	}
 }
 
-const resolveOutputFormats = (): Array<'json' | 'pretty'> => {
+const getOutputFormatsFromEnv = (): Array<'json' | 'pretty'> => {
 	const fromEnv = process.env.LOG_FORMATS
 		?.split(',')
 		.map(format => format.trim().toLowerCase())
-		.filter((format): format is 'json' | 'pretty' => format === 'json' || format === 'pretty');
+		.filter(isValidLogFormat);
 
 	if (fromEnv && fromEnv.length > 0) {
 		return Array.from(new Set(fromEnv));
@@ -220,7 +227,7 @@ export const logger = new Logger({
 	minLevel: (process.env.LOG_LEVEL as LogLevel) || LogLevel.INFO,
 	enableConsole: true,
 	enableStructured: process.env.STRUCTURED_LOGS !== 'false',
-	outputFormats: resolveOutputFormats(),
+	outputFormats: getOutputFormatsFromEnv(),
 });
 
 /**

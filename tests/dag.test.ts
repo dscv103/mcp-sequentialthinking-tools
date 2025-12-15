@@ -61,12 +61,11 @@ describe('ThoughtDAG', () => {
 		const first = dag.getParallelGroups();
 		const second = dag.getParallelGroups();
 
-		assert.notStrictEqual(first, second);
 		assert.deepStrictEqual(first, second);
-
-		// Mutating the first result should not affect cached value
-		first[0].push(9999);
-		const third = dag.getParallelGroups();
-		assert.strictEqual(third[0].includes(9999), false);
+		assert.ok(Object.isFrozen(second), 'cached parallel groups should be frozen');
+		assert.ok(Object.isFrozen(second[0]), 'individual groups should be frozen');
+		assert.throws(() => {
+			(second[0] as number[]).push(9999);
+		});
 	});
 });
