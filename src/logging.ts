@@ -100,15 +100,13 @@ class Logger {
 
 		this.logCounts[entry.level]++;
 
-		const formattedEntries = this.config.outputFormats.map(format => ({
-			format,
-			content: this.formatEntry(entry, format),
-		}));
+		const formattedEntries = this.config.outputFormats.map(format => this.formatEntry(entry, format));
+		const payload = formattedEntries.length === 1
+			? formattedEntries[0]
+			: formattedEntries.join('\n');
 
 		for (const sink of this.sinks) {
-			for (const formatted of formattedEntries) {
-				sink.write(entry, formatted.content);
-			}
+			sink.write(entry, payload);
 		}
 	}
 

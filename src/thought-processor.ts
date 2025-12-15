@@ -24,13 +24,16 @@ export interface ThoughtProcessorDeps {
 export class ThoughtProcessor {
 	private thoughtHistory: ThoughtData[] = [];
 	private branches: Record<string, ThoughtData[]> = {};
+	private branchOrder: string[] = [];
 	private formatCache: Map<string, string> = new Map();
+	private static readonly FORMAT_CACHE_LIMIT = 200;
 
 	constructor(private readonly deps: ThoughtProcessorDeps) {}
 
 	clear(): void {
 		this.thoughtHistory = [];
 		this.branches = {};
+		this.branchOrder = [];
 		this.formatCache.clear();
 		this.deps.backtrackingManager.clear();
 		this.deps.thoughtDAG.clear();
@@ -96,6 +99,10 @@ Expected Outcome: ${step.expected_outcome}${
 			thought,
 			current_step?.step_description ?? '',
 			current_step?.expected_outcome ?? '',
+			is_revision ? 'rev' : 'no-rev',
+			revises_thought ?? '',
+			branch_from_thought ?? '',
+			branch_id ?? '',
 		].join('|');
 
 		const cached = this.formatCache.get(cacheKey);
@@ -126,6 +133,12 @@ ${formattedContent}
 └${border}┘`;
 
 		this.formatCache.set(cacheKey, formatted);
+		if (this.formatCache.size > ThoughtProcessor.FORMAT_CACHE_LIMIT) {
+			const oldestKey = this.formatCache.keys().next().value as string | undefined;
+			if (oldestKey) {
+				this.formatCache.delete(oldestKey);
+			}
+		}
 		return formatted;
 	}
 
@@ -199,12 +212,21 @@ ${formattedContent}
 		if (thought.branch_from_thought && thought.branch_id) {
 			if (!this.branches[thought.branch_id]) {
 				this.branches[thought.branch_id] = [];
+				this.branchOrder.push(thought.branch_id);
 			}
 			this.branches[thought.branch_id].push(thought);
 			logger.debug('Branch updated', { 
 				branchId: thought.branch_id,
 				branchSize: this.branches[thought.branch_id].length
 			});
+
+			if (this.branchOrder.length > this.deps.maxHistorySize) {
+				const oldestBranch = this.branchOrder.shift();
+				if (oldestBranch) {
+					delete this.branches[oldestBranch];
+					logger.debug('Branch trimmed', { branchId: oldestBranch });
+				}
+			}
 		}
 	}
 

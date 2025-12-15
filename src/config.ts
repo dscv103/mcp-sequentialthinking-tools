@@ -80,7 +80,11 @@ const sanitizeToolChain = (config: ToolChainScoringConfig): ToolChainScoringConf
 const validateScoringConfig = (config: ScoringConfigShape): ScoringConfigShape => {
 	const result = v.safeParse(scoringSchema, config);
 	if (result.success) {
-		return result.output;
+		return {
+			backtracking: sanitizeBacktracking(result.output.backtracking),
+			toolChains: sanitizeToolChain(result.output.toolChains),
+			logging: result.output.logging,
+		};
 	}
 
 	logger.warn('Scoring configuration validation failed, applying sanitized defaults', {
@@ -107,7 +111,7 @@ export const ScoringConfig: ScoringConfigShape = DEFAULT_SCORING_CONFIG;
 
 export const loadScoringConfig = (env: NodeJS.ProcessEnv = process.env): ScoringConfigShape => {
 	const merged: ScoringConfigShape = {
-		backtracking: sanitizeBacktracking({
+		backtracking: {
 			minConfidence: parseNumber(env.MIN_CONFIDENCE, DEFAULT_SCORING_CONFIG.backtracking.minConfidence),
 			enableAutoBacktrack:
 				env.ENABLE_BACKTRACKING === 'true'
@@ -147,8 +151,8 @@ export const loadScoringConfig = (env: NodeJS.ProcessEnv = process.env): Scoring
 				env.DECLINING_CONFIDENCE_THRESHOLD,
 				DEFAULT_SCORING_CONFIG.backtracking.decliningConfidenceThreshold,
 			),
-		}),
-		toolChains: sanitizeToolChain({
+		},
+		toolChains: {
 			prefixMatchWeight: parseNumber(
 				env.TOOL_CHAIN_PREFIX_MATCH_WEIGHT,
 				DEFAULT_SCORING_CONFIG.toolChains.prefixMatchWeight,
@@ -177,7 +181,7 @@ export const loadScoringConfig = (env: NodeJS.ProcessEnv = process.env): Scoring
 				env.TOOL_CHAIN_CONFIDENCE_WEIGHT,
 				DEFAULT_SCORING_CONFIG.toolChains.confidenceWeight,
 			),
-		}),
+		},
 		logging: {
 			level: (env.LOG_LEVEL as LogLevel) || DEFAULT_SCORING_CONFIG.logging.level,
 		},

@@ -4,6 +4,7 @@
  */
 
 import { logger } from './logging.js';
+import { DagCycleError } from './dag.js';
 
 export type ErrorCategory =
 	| 'ValidationError'
@@ -97,6 +98,9 @@ export class CircuitBreaker {
 		try {
 			const result = await operation();
 			this.successCount++;
+			if (this.state === 'closed') {
+				this.failureCount = 0;
+			}
 
 			if (this.state === 'half-open' && this.successCount >= this.config.halfOpenSuccessThreshold) {
 				this.transitionToClosed();
@@ -137,6 +141,9 @@ export function createErrorContext(
 export function categorizeError(error: unknown): ErrorCategory {
 	if (error instanceof CircuitBreakerOpenError) {
 		return 'CircuitBreakerOpen';
+	}
+	if (error instanceof DagCycleError || (error instanceof Error && error.name === 'DagCycleError')) {
+		return 'DAGError';
 	}
 
 	if (error instanceof Error) {
