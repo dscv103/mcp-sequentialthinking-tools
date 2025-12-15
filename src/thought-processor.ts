@@ -28,7 +28,7 @@ export class ThoughtProcessor {
 	private formatCache: Map<string, string> = new Map();
 	private static readonly FORMAT_CACHE_LIMIT = 200;
 
-	constructor(private readonly deps: ThoughtProcessorDeps) {}
+	constructor(private readonly deps: ThoughtProcessorDeps) { }
 
 	clear(): void {
 		this.thoughtHistory = [];
@@ -41,13 +41,61 @@ export class ThoughtProcessor {
 		logger.info('Processor state cleared', { sessionId: this.deps.sessionId });
 	}
 
+	async hydrate(history: ThoughtData[]): Promise<void> {
+		this.clear();
+
+		if (history.length === 0) return;
+
+		logger.info('Hydrating processor state', {
+			count: history.length,
+			sessionId: this.deps.sessionId
+		});
+
+		for (const thought of history) {
+			// 1. Restore core history
+			this.thoughtHistory.push(thought);
+
+			// 2. Restore branches
+			this.updateBranches(thought);
+
+			// 3. Restore DAG if enabled
+			if (this.deps.enableDAG) {
+				await this.deps.dagBreaker.execute(async () => {
+					this.deps.thoughtDAG.addThought(thought);
+					this.deps.thoughtDAG.markExecuting(thought.thought_number);
+					this.deps.thoughtDAG.markCompleted(thought.thought_number, {
+						confidence: thought.confidence,
+						rehydrated: true
+					});
+				});
+			}
+
+			// 4. Restore Backtracking State (partial, just confidence stats if needed, 
+			// but BacktrackingManager largely recalculates on new thoughts. 
+			// We might want to feed it confidence values if it tracks history internally.)
+			// For now, we assume BacktrackingManager is stateless regarding *past* decision logic 
+			// except what's in the thoughts themselves, but let's check if we need to do anything.
+			// (Checked BacktrackingManager usage: it uses thought history from arguments often, 
+			// but might have internal state. The `clear()` method implies some internal state.
+			// However, for just restoring context, preserving `thoughHistory` is key.)
+		}
+
+		// Re-enforce history limit in case the DB has more than the current limit
+		this.enforceHistoryLimit();
+
+		logger.info('Processor hydration complete', {
+			historySize: this.thoughtHistory.length,
+			branchCount: Object.keys(this.branches).length
+		});
+	}
+
 	private formatRecommendation(step: StepRecommendation): string {
 		const tools = step.recommended_tools
 			.map((tool) => {
-				const alternatives = tool.alternatives?.length 
+				const alternatives = tool.alternatives?.length
 					? ` (alternatives: ${tool.alternatives.join(', ')})`
 					: '';
-				const inputs = tool.suggested_inputs 
+				const inputs = tool.suggested_inputs
 					? `\n    Suggested inputs: ${JSON.stringify(tool.suggested_inputs)}`
 					: '';
 				return [
@@ -60,11 +108,10 @@ export class ThoughtProcessor {
 		return `Step: ${step.step_description}
 Recommended Tools:
 ${tools}
-Expected Outcome: ${step.expected_outcome}${
-			step.next_step_conditions
+Expected Outcome: ${step.expected_outcome}${step.next_step_conditions
 				? `\nConditions for next step:\n  - ${step.next_step_conditions.join('\n  - ')}`
 				: ''
-		}`;
+			}`;
 	}
 
 	private formatThought(thoughtData: ThoughtData): string {
@@ -175,7 +222,7 @@ ${formattedContent}
 				message:
 					'Low confidence detected. Consider revising approach from earlier thought.',
 			};
-			
+
 			return {
 				content: [
 					{
@@ -215,7 +262,7 @@ ${formattedContent}
 				this.branchOrder.push(thought.branch_id);
 			}
 			this.branches[thought.branch_id].push(thought);
-			logger.debug('Branch updated', { 
+			logger.debug('Branch updated', {
 				branchId: thought.branch_id,
 				branchSize: this.branches[thought.branch_id].length
 			});
@@ -248,17 +295,17 @@ ${formattedContent}
 
 	private async updateDAG(thought: ThoughtData): Promise<(ReturnType<ThoughtDAG['getStats']> & { parallelGroupCount?: number }) | undefined> {
 		if (!this.deps.enableDAG) return undefined;
-		
+
 		try {
 			return await this.deps.dagBreaker.execute(async () => {
 				this.deps.thoughtDAG.addThought(thought);
-				
+
 				this.deps.thoughtDAG.markExecuting(thought.thought_number);
 				this.deps.thoughtDAG.markCompleted(thought.thought_number, {
 					confidence: thought.confidence,
 					thoughtNumber: thought.thought_number,
 				});
-				
+
 				const stats = this.deps.thoughtDAG.getStats();
 				const parallelGroups = this.deps.thoughtDAG.getParallelGroups();
 				const dagStats = { ...stats, parallelGroupCount: parallelGroups.length };
@@ -296,7 +343,7 @@ ${formattedContent}
 		const previousTools = thought.previous_steps
 			.flatMap(step => step.recommended_tools.map(t => t.tool_name));
 		const nextToolSuggestions = this.deps.toolChainLibrary.suggestNextTool(previousTools);
-		
+
 		if (nextToolSuggestions.length > 0) {
 			const toolChainSuggestions = nextToolSuggestions.slice(0, 3);
 			logger.debug('Tool chain suggestions generated', {
@@ -317,9 +364,9 @@ ${formattedContent}
 			thought.confidence,
 			thought.thought
 		);
-		logger.debug('Tool chain finalized', { 
-			success, 
-			confidence: thought.confidence 
+		logger.debug('Tool chain finalized', {
+			success,
+			confidence: thought.confidence
 		});
 	}
 
