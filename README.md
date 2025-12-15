@@ -198,6 +198,47 @@ Production-ready logging with performance tracking:
 - **JSON Structured Logs**: Enable with `STRUCTURED_LOGS=true`
 - **Performance Metrics**: Automatic tracking of operation durations
 - **Log Levels**: Configure with `LOG_LEVEL` (debug, info, warn, error)
+- **Multiple Outputs**: Set `LOG_FORMATS=json,pretty` to emit both structured and human-readable logs
+- **Metrics Export**: Periodic summaries include operation timing and log-level counts
+
+### Circuit Breakers & Categorized Errors
+
+- **Circuit breaker** protection around persistence and DAG updates prevents cascading failures
+- **Categorized error contexts** surface whether failures are validation, persistence, configuration, DAG, or circuit-related
+- **Retry logic** remains available for transient issues, complementing the breaker guardrails
+
+### Configuration Validation
+
+- Defaults live in `src/config-constants.ts` and are sanitized through `ConfigurationManager`
+- All scoring inputs are clamped to valid ranges (0–1 for confidence values, positive integers for limits)
+- Environment overrides are validated before use to keep runtime behavior predictable
+
+### Architecture Overview
+
+```
+┌─────────────────┐     ┌──────────────────┐
+│ Configuration   │     │ Logging & Metrics│
+│ Manager         │────▶│ (multi-format)   │
+└──────┬──────────┘     └────────┬─────────┘
+       │                         │
+       ▼                         ▼
+┌───────────────┐      ┌──────────────────┐
+│ ThoughtProcessor│◀──▶│ Backtracking/DAG │
+└──────┬────────┘      └────────┬────────┘
+       │                         │
+       ▼                         ▼
+┌──────────────┐       ┌──────────────────┐
+│ Persistence  │◀─────▶│ Circuit Breakers │
+└──────────────┘       └──────────────────┘
+```
+
+### Testing
+
+Run the focused test suite (backtracking, DAG, and circuit breaker coverage):
+
+```bash
+npm test
+```
 - **Metric Reporting**: Periodic performance summaries
 
 ### State Persistence with SQLite
