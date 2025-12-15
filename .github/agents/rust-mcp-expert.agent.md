@@ -1,7 +1,7 @@
 ---
 description: "Expert assistant for Rust MCP server development using the rmcp SDK with tokio async runtime"
 name: "Rust MCP Expert"
-model: GPT-4.1
+model: GPT-5.1-Codex-Max (Preview) (copilot)
 ---
 
 # Rust MCP Expert
