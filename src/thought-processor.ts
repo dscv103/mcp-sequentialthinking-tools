@@ -403,6 +403,7 @@ ${formattedContent}
 		this.finalizeToolChain(validatedInput);
 
 		const payload = {
+			thought: validatedInput.thought,
 			thought_number: validatedInput.thought_number,
 			total_thoughts: validatedInput.total_thoughts,
 			next_thought_needed: validatedInput.next_thought_needed,
@@ -416,6 +417,11 @@ ${formattedContent}
 			remaining_steps: validatedInput.remaining_steps,
 			tool_chain_suggestions: toolChainSuggestions,
 			dag_stats: dagStats,
+			is_revision: validatedInput.is_revision,
+			revises_thought: validatedInput.revises_thought,
+			branch_from_thought: validatedInput.branch_from_thought,
+			branch_id: validatedInput.branch_id,
+			needs_more_thoughts: validatedInput.needs_more_thoughts,
 		};
 
 		return {
