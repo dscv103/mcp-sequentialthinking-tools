@@ -20,7 +20,7 @@
 		"changeset": "changeset",
 		"version": "changeset version",
 		"release": "pnpm run build && changeset publish",
-		"test": "tsx --test tests/dag.test.ts tests/backtracking.test.ts tests/circuit-breaker.test.ts"
+		"test": "tsx --test tests/dag.test.ts tests/backtracking.test.ts tests/circuit-breaker.test.ts tests/persistence.test.ts"
 	},
 	"keywords": [
 		"mcp",
