@@ -227,20 +227,58 @@ export class PersistenceLayer {
 		}
 	}
 
-	async getThoughtHistory(sessionId?: string, limit: number = 100): Promise<ThoughtData[]> {
+	private parseJson<T>(
+		value: unknown,
+		defaultValue: T,
+		context: Record<string, unknown>,
+		validator?: (parsed: unknown) => boolean
+	): T {
+		if (value === null || value === undefined) return defaultValue;
+		try {
+			const parsed = JSON.parse(String(value));
+			if (validator && !validator(parsed)) {
+				logger.warn('Parsed JSON failed validation during rehydration', context);
+				return defaultValue;
+			}
+			return (parsed ?? defaultValue) as T;
+		} catch (error) {
+			logger.warn('Failed to parse JSON field during rehydration', context);
+			return defaultValue;
+		}
+	}
+
+	private extractValidIds(values: Iterable<unknown>): number[] {
+		return Array.from(values)
+			.map(value => Number(value))
+			.filter(value => Number.isFinite(value));
+	}
+
+	/**
+	 * Returns all persisted thoughts for the specified session.
+	 * Returns an empty array (with a warning) when no sessionId is provided.
+	 */
+	async getThoughtHistory(sessionId?: string): Promise<ThoughtData[]> {
 		const db = this.db;
 		if (!db || !this.config.enablePersistence) return [];
 
+		if (!sessionId) {
+			logger.warn('getThoughtHistory called without sessionId');
+			return [];
+		}
+
 		const result = await safeExecute(async () => {
-			const query = sessionId
-				? 'SELECT * FROM thoughts WHERE session_id = ? ORDER BY thought_number DESC LIMIT ?'
-				: 'SELECT * FROM thoughts ORDER BY thought_number DESC LIMIT ?';
-			
-			const params = sessionId ? [sessionId, limit] : [limit];
-			const rows = db.prepare(query).all(...params) as any[];
+			const thoughtRows = db.prepare(`
+				SELECT * FROM thoughts 
+				WHERE session_id = ? 
+				ORDER BY thought_number ASC
+			`).all(sessionId) as any[];
+
+			if (thoughtRows.length === 0) return [];
 
 			const thoughts: ThoughtData[] = [];
-			for (const row of rows) {
+			const thoughtMap = new Map<number, ThoughtData>();
+
+			for (const row of thoughtRows) {
 				const thought: ThoughtData = {
 					thought_number: row.thought_number,
 					total_thoughts: row.total_thoughts,
@@ -251,10 +289,110 @@ export class PersistenceLayer {
 					branch_id: row.branch_id || undefined,
 					needs_more_thoughts: Boolean(row.needs_more_thoughts),
 					next_thought_needed: Boolean(row.next_thought_needed),
-					available_mcp_tools: JSON.parse(row.available_mcp_tools),
+					available_mcp_tools: this.parseJson<string[]>(
+						row.available_mcp_tools,
+						[],
+						{
+							thoughtId: row.id,
+							field: 'available_mcp_tools',
+						},
+						Array.isArray
+					),
+					confidence: row.confidence ?? undefined,
 				};
 
 				thoughts.push(thought);
+				thoughtMap.set(row.id, thought);
+			}
+
+			const thoughtIds = this.extractValidIds(thoughtRows.map(row => row.id));
+			const thoughtPlaceholders = thoughtIds.map(() => '?').join(',');
+
+			const stepRows = thoughtPlaceholders
+				? (db.prepare(`
+					SELECT * FROM step_recommendations
+					WHERE thought_id IN (${thoughtPlaceholders})
+					ORDER BY thought_id ASC, is_current DESC, id ASC
+				`).all(...thoughtIds) as any[])
+				: [];
+
+			const stepMap = new Map<number, StepRecommendation>();
+			const stepIds: number[] = [];
+
+			for (const row of stepRows) {
+				const step: StepRecommendation = {
+					step_description: row.step_description,
+					expected_outcome: row.expected_outcome,
+					recommended_tools: [],
+				};
+
+				const parsedConditions = this.parseJson<string[] | undefined>(
+					row.next_step_conditions,
+					undefined,
+					{ stepId: row.id, field: 'next_step_conditions' },
+					value => value === undefined || Array.isArray(value)
+				);
+				if (parsedConditions !== undefined) {
+					step.next_step_conditions = parsedConditions;
+				}
+
+				const thought = thoughtMap.get(row.thought_id);
+				if (thought) {
+					if (row.is_current) {
+						if (!thought.current_step) {
+							thought.current_step = step;
+						} else {
+							throw new Error(
+								`Multiple current steps found during rehydration for thoughtId=${row.thought_id}. Duplicate stepId=${row.id}.`
+							);
+						}
+					} else {
+						thought.previous_steps = [...(thought.previous_steps || []), step];
+					}
+				}
+
+				stepMap.set(row.id, step);
+				const stepIdNum = Number(row.id);
+				if (Number.isFinite(stepIdNum)) {
+					stepIds.push(stepIdNum);
+				}
+			}
+
+			// Step IDs are validated numeric values prior to placeholder interpolation
+			const stepPlaceholders = stepIds.map(() => '?').join(',');
+			const toolRows = stepPlaceholders
+				? (db.prepare(`
+					SELECT * FROM tool_recommendations
+					WHERE step_id IN (${stepPlaceholders})
+					ORDER BY step_id ASC, priority ASC, id ASC
+				`).all(...stepIds) as any[])
+				: [];
+
+			for (const row of toolRows) {
+				const step = stepMap.get(row.step_id);
+				if (!step) continue;
+
+				const suggestedInputs = this.parseJson<Record<string, unknown> | undefined>(
+					row.suggested_inputs,
+					undefined,
+					{ toolId: row.id, field: 'suggested_inputs' },
+					value => value === undefined || (typeof value === 'object' && !Array.isArray(value))
+				);
+				const alternatives = this.parseJson<string[] | undefined>(
+					row.alternatives,
+					undefined,
+					{ toolId: row.id, field: 'alternatives' },
+					value => value === undefined || Array.isArray(value)
+				);
+
+				step.recommended_tools.push({
+					tool_name: row.tool_name,
+					confidence: row.confidence,
+					rationale: row.rationale,
+					priority: row.priority,
+					...(suggestedInputs !== undefined ? { suggested_inputs: suggestedInputs } : {}),
+					...(alternatives !== undefined ? { alternatives } : {}),
+				});
 			}
 
 			return thoughts;
@@ -268,15 +406,34 @@ export class PersistenceLayer {
 		if (!db || !this.config.enablePersistence) return;
 
 		await safeExecute(async () => {
-			if (sessionId) {
-				db.prepare('DELETE FROM thoughts WHERE session_id = ?').run(sessionId);
-				logger.info('Session history cleared', { sessionId });
-			} else {
-				db.exec('DELETE FROM thoughts');
-				db.exec('DELETE FROM step_recommendations');
-				db.exec('DELETE FROM tool_recommendations');
-				logger.info('All history cleared');
-			}
+			const transactional = db.transaction((session?: string) => {
+				if (session) {
+					db.prepare(`
+						DELETE FROM tool_recommendations 
+						WHERE step_id IN (
+							SELECT id FROM step_recommendations 
+							WHERE thought_id IN (
+								SELECT id FROM thoughts WHERE session_id = ?
+							)
+						)
+					`).run(session);
+
+					db.prepare(`
+						DELETE FROM step_recommendations 
+						WHERE thought_id IN (SELECT id FROM thoughts WHERE session_id = ?)
+					`).run(session);
+
+					db.prepare('DELETE FROM thoughts WHERE session_id = ?').run(session);
+					logger.info('Session history cleared', { sessionId: session });
+				} else {
+					db.exec('DELETE FROM tool_recommendations');
+					db.exec('DELETE FROM step_recommendations');
+					db.exec('DELETE FROM thoughts');
+					logger.info('All history cleared');
+				}
+			});
+
+			transactional(sessionId);
 		}, 'clearHistory');
 	}
 
