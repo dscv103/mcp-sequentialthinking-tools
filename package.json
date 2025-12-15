@@ -19,7 +19,8 @@
 		"dev": "npx @modelcontextprotocol/inspector dist/index.js",
 		"changeset": "changeset",
 		"version": "changeset version",
-		"release": "pnpm run build && changeset publish"
+		"release": "pnpm run build && changeset publish",
+		"test": "tsx --test tests/dag.test.ts tests/backtracking.test.ts tests/circuit-breaker.test.ts"
 	},
 	"keywords": [
 		"mcp",
@@ -63,6 +64,7 @@
 		"@changesets/cli": "^2.29.8",
 		"@types/better-sqlite3": "^7.6.13",
 		"@types/node": "^24.10.1",
+		"tsx": "^4.19.2",
 		"typescript": "^5.9.3"
 	}
 }

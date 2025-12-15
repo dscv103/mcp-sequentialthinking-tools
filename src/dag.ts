@@ -26,6 +26,14 @@ export interface DAGExecutionResult {
 export class ThoughtDAG {
 	private nodes: Map<number, DAGNode> = new Map();
 	private executionOrder: number[] = [];
+	private levelCache: Map<number, number> = new Map();
+	private parallelGroupsCache: number[][] | null = null;
+	private cacheDirty = false;
+
+	private invalidateCache(): void {
+		this.cacheDirty = true;
+		this.parallelGroupsCache = null;
+	}
 
 	/**
 	 * Add a thought to the DAG
@@ -59,6 +67,8 @@ export class ThoughtDAG {
 		};
 
 		this.nodes.set(thought.thought_number, node);
+		this.levelCache.set(thought.thought_number, level);
+		this.invalidateCache();
 
 		// Update parent nodes to reference this as a child
 		for (const depNum of dependencies) {
@@ -110,6 +120,7 @@ export class ThoughtDAG {
 		if (node) {
 			node.status = 'executing';
 			logger.debug('Thought marked as executing', { thoughtNumber });
+			this.invalidateCache();
 		}
 	}
 
@@ -122,6 +133,7 @@ export class ThoughtDAG {
 			node.status = 'completed';
 			node.result = result;
 			logger.debug('Thought marked as completed', { thoughtNumber });
+			this.invalidateCache();
 
 			// Update children that may now be ready
 			for (const childNum of node.children) {
@@ -149,6 +161,7 @@ export class ThoughtDAG {
 			node.status = 'failed';
 			node.error = error;
 			logger.error('Thought failed', new Error(error), { thoughtNumber });
+			this.invalidateCache();
 
 			// Optionally mark children as failed too
 			this.propagateFailure(thoughtNumber);
@@ -224,6 +237,7 @@ export class ThoughtDAG {
 			nodeCount: sorted.length,
 			order: sorted,
 		});
+		this.invalidateCache();
 
 		return sorted;
 	}
@@ -288,24 +302,48 @@ export class ThoughtDAG {
 	 * Returns thoughts grouped by execution level (can run in parallel)
 	 */
 	getParallelGroups(): number[][] {
-		const levels: Map<number, number> = new Map(); // thoughtNum -> level
-		const missingLevels: number[] = [];
+		if (!this.cacheDirty && this.parallelGroupsCache) {
+			return this.parallelGroupsCache.map(group => [...group]);
+		}
 
-		for (const [thoughtNum, node] of this.nodes.entries()) {
-			if (node.level === undefined) {
-				missingLevels.push(thoughtNum);
+		const levels: Map<number, number> = new Map();
+		const visiting = new Set<number>();
+
+		const resolveLevel = (thoughtNum: number): number => {
+			if (levels.has(thoughtNum)) {
+				return levels.get(thoughtNum)!;
 			}
-			levels.set(thoughtNum, node.level ?? 0);
+
+			if (visiting.has(thoughtNum)) {
+				logger.warn('Cycle detected while computing parallel groups', { thoughtNum });
+				return 0;
+			}
+
+			visiting.add(thoughtNum);
+			const node = this.nodes.get(thoughtNum);
+			if (!node) {
+				levels.set(thoughtNum, 0);
+				visiting.delete(thoughtNum);
+				return 0;
+			}
+
+			let maxParentLevel = -1;
+			for (const dep of node.dependencies) {
+				const parentLevel = resolveLevel(dep);
+				maxParentLevel = Math.max(maxParentLevel, parentLevel);
+			}
+
+			const level = maxParentLevel + 1;
+			levels.set(thoughtNum, level);
+			this.levelCache.set(thoughtNum, level);
+			visiting.delete(thoughtNum);
+			return level;
+		};
+
+		for (const thoughtNum of this.nodes.keys()) {
+			resolveLevel(thoughtNum);
 		}
 
-		if (missingLevels.length > 0) {
-			logger.debug('Missing cached DAG levels detected', { 
-				missingLevelCount: missingLevels.length,
-				nodes: missingLevels,
-			});
-		}
-
-		// Group by level
 		const groups: Map<number, number[]> = new Map();
 		for (const [thoughtNum, level] of levels.entries()) {
 			if (!groups.has(level)) {
@@ -314,7 +352,6 @@ export class ThoughtDAG {
 			groups.get(level)!.push(thoughtNum);
 		}
 
-		// Convert to array of arrays, sorted by level
 		const result: number[][] = [];
 		const sortedLevels = Array.from(groups.keys()).sort((a, b) => a - b);
 		for (const level of sortedLevels) {
@@ -326,6 +363,9 @@ export class ThoughtDAG {
 			groups: result,
 		});
 
+		this.parallelGroupsCache = result.map(group => [...group]);
+		this.cacheDirty = false;
+
 		return result;
 	}
 
@@ -335,6 +375,9 @@ export class ThoughtDAG {
 	clear(): void {
 		this.nodes.clear();
 		this.executionOrder = [];
+		this.levelCache.clear();
+		this.parallelGroupsCache = null;
+		this.cacheDirty = false;
 		logger.info('DAG cleared');
 	}
 }

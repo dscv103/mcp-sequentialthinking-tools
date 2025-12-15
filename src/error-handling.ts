@@ -5,11 +5,21 @@
 
 import { logger } from './logging.js';
 
+export type ErrorCategory =
+	| 'ValidationError'
+	| 'PersistenceError'
+	| 'DAGError'
+	| 'ConfigurationError'
+	| 'CircuitBreakerOpen'
+	| 'ExternalServiceError'
+	| 'UnknownError';
+
 export interface ErrorContext {
 	operation: string;
 	timestamp: string;
 	error: string;
 	errorType: string;
+	category: ErrorCategory;
 	retryCount?: number;
 	thoughtNumber?: number;
 	branchId?: string;
@@ -30,6 +40,79 @@ const DEFAULT_RETRY_CONFIG: RetryConfig = {
 	backoffMultiplier: 2,
 };
 
+export class CircuitBreakerOpenError extends Error {
+	constructor(message = 'Circuit breaker is open') {
+		super(message);
+		this.name = 'CircuitBreakerOpenError';
+	}
+}
+
+export interface CircuitBreakerConfig {
+	failureThreshold: number;
+	resetTimeoutMs: number;
+	halfOpenSuccessThreshold: number;
+	name?: string;
+}
+
+export class CircuitBreaker {
+	private state: 'closed' | 'open' | 'half-open' = 'closed';
+	private failureCount = 0;
+	private successCount = 0;
+	private nextAttempt = Date.now();
+
+	constructor(private readonly config: CircuitBreakerConfig) {}
+
+	private transitionToOpen(): void {
+		this.state = 'open';
+		this.failureCount = 0;
+		this.successCount = 0;
+		this.nextAttempt = Date.now() + this.config.resetTimeoutMs;
+		logger.warn(`Circuit breaker "${this.config.name || 'default'}" opened`);
+	}
+
+	private transitionToHalfOpen(): void {
+		this.state = 'half-open';
+		this.successCount = 0;
+		logger.info(`Circuit breaker "${this.config.name || 'default'}" half-open`);
+	}
+
+	private transitionToClosed(): void {
+		this.state = 'closed';
+		this.failureCount = 0;
+		this.successCount = 0;
+		logger.info(`Circuit breaker "${this.config.name || 'default'}" closed`);
+	}
+
+	async execute<T>(operation: () => Promise<T>): Promise<T> {
+		if (this.state === 'open' && Date.now() < this.nextAttempt) {
+			throw new CircuitBreakerOpenError(
+				`Circuit breaker "${this.config.name || 'default'}" is open`,
+			);
+		}
+
+		if (this.state === 'open') {
+			this.transitionToHalfOpen();
+		}
+
+		try {
+			const result = await operation();
+			this.successCount++;
+
+			if (this.state === 'half-open' && this.successCount >= this.config.halfOpenSuccessThreshold) {
+				this.transitionToClosed();
+			}
+
+			return result;
+		} catch (error) {
+			this.failureCount++;
+			if (this.failureCount >= this.config.failureThreshold) {
+				this.transitionToOpen();
+			}
+			throw error;
+		}
+	}
+}
+
 /**
  * Wrap an error with structured context
  */
@@ -45,9 +128,31 @@ export function createErrorContext(
 		timestamp: new Date().toISOString(),
 		error: errorObj.message,
 		errorType: errorObj.name || 'UnknownError',
+		category: categorizeError(errorObj),
 		stackTrace: errorObj.stack,
 		...additionalContext,
 	};
+}
+
+export function categorizeError(error: unknown): ErrorCategory {
+	if (error instanceof CircuitBreakerOpenError) {
+		return 'CircuitBreakerOpen';
+	}
+
+	if (error instanceof Error) {
+		const message = error.message.toLowerCase();
+		if (message.includes('validation')) return 'ValidationError';
+		if (message.includes('dag')) return 'DAGError';
+		if (message.includes('config') || message.includes('configuration')) return 'ConfigurationError';
+		if (message.includes('sqlite') || message.includes('database') || message.includes('db')) {
+			return 'PersistenceError';
+		}
+		if (message.includes('network') || message.includes('timeout') || message.includes('external')) {
+			return 'ExternalServiceError';
+		}
+	}
+
+	return 'UnknownError';
 }
 
 /**
