@@ -82,7 +82,7 @@ export class ToolCapabilityMatcher {
 
 		// Tag matching (medium weight)
 		if (requirements.tags && cap.tags) {
-			const matchingTags = requirements.tags.filter(tag => 
+			const matchingTags = requirements.tags.filter(tag =>
 				cap.tags.includes(tag)
 			);
 			if (matchingTags.length > 0) {
@@ -194,9 +194,11 @@ export class ToolCapabilityMatcher {
  * Infer capabilities from tool name and description
  * Used for tools without explicit capability metadata
  */
+export const COMPLEXITY_TERMS = ['api', 'advanced', 'complex', 'sophisticated', 'ml', 'ai'];
+
 export function inferCapabilities(tool: Tool): ToolCapability {
 	const text = `${tool.name} ${tool.description}`.toLowerCase();
-	
+
 	// Infer category
 	let category = 'general';
 	if (text.includes('search') || text.includes('find') || text.includes('query')) {
@@ -231,10 +233,11 @@ export function inferCapabilities(tool: Tool): ToolCapability {
 		tags.push('transform');
 	}
 
+
+
 	// Infer complexity based on description length and technical terms
 	let complexity: 'low' | 'medium' | 'high' = 'medium';
-	const technicalTerms = ['api', 'advanced', 'complex', 'sophisticated', 'ml', 'ai'];
-	if (technicalTerms.some(term => text.includes(term))) {
+	if (COMPLEXITY_TERMS.some(term => text.includes(term))) {
 		complexity = 'high';
 	} else if (tool.description.length < 100) {
 		complexity = 'low';
@@ -252,7 +255,7 @@ export function inferCapabilities(tool: Tool): ToolCapability {
  */
 export function enrichToolsWithCapabilities(tools: Map<string, Tool>): void {
 	let enrichedCount = 0;
-	
+
 	for (const [name, tool] of tools.entries()) {
 		if (!tool.capabilities) {
 			tool.capabilities = inferCapabilities(tool);

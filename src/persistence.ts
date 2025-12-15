@@ -113,7 +113,7 @@ export class PersistenceLayer {
 		const result = await safeExecute(async () => {
 			// Use transaction for atomicity
 			db.exec('BEGIN TRANSACTION');
-			
+
 			try {
 				const stmt = db.prepare(`
 					INSERT INTO thoughts (
@@ -155,9 +155,9 @@ export class PersistenceLayer {
 
 				db.exec('COMMIT');
 
-				logger.debug('Thought saved to database', { 
-					thoughtId, 
-					thoughtNumber: thought.thought_number 
+				logger.debug('Thought saved to database', {
+					thoughtId,
+					thoughtNumber: thought.thought_number
 				});
 
 				return thoughtId;
@@ -172,8 +172,8 @@ export class PersistenceLayer {
 
 	private saveStepRecommendation(
 		db: Database.Database,
-		thoughtId: number, 
-		step: StepRecommendation, 
+		thoughtId: number,
+		step: StepRecommendation,
 		isCurrent: boolean
 	): void {
 		if (!db) return;
@@ -247,16 +247,10 @@ export class PersistenceLayer {
 		}
 	}
 
-	private extractValidIds(values: Iterable<unknown>): number[] {
-		return Array.from(values)
-			.map(value => Number(value))
-			.filter(value => Number.isFinite(value));
-	}
-
 	/**
-	 * Returns all persisted thoughts for the specified session.
-	 * Returns an empty array (with a warning) when no sessionId is provided.
-	 */
+		 * Returns all persisted thoughts for the specified session.
+		 * Returns an empty array (with a warning) when no sessionId is provided.
+		 */
 	async getThoughtHistory(sessionId?: string): Promise<ThoughtData[]> {
 		const db = this.db;
 		if (!db || !this.config.enablePersistence) return [];
@@ -306,15 +300,22 @@ export class PersistenceLayer {
 			}
 
 			const thoughtIds = this.extractValidIds(thoughtRows.map(row => row.id));
-			const thoughtPlaceholders = thoughtIds.map(() => '?').join(',');
 
-			const stepRows = thoughtPlaceholders
-				? (db.prepare(`
+			// Chunk queries to avoid SQLite limit (999 variables)
+			const CHUNK_SIZE = 900;
+			const thoughtIdChunks = this.chunk(thoughtIds, CHUNK_SIZE);
+
+			const stepRows: any[] = [];
+			for (const chunk of thoughtIdChunks) {
+				if (chunk.length === 0) continue;
+				const placeholders = chunk.map(() => '?').join(',');
+				const rows = db.prepare(`
 					SELECT * FROM step_recommendations
-					WHERE thought_id IN (${thoughtPlaceholders})
+					WHERE thought_id IN (${placeholders})
 					ORDER BY thought_id ASC, is_current DESC, id ASC
-				`).all(...thoughtIds) as any[])
-				: [];
+				`).all(...chunk) as any[];
+				stepRows.push(...rows);
+			}
 
 			const stepMap = new Map<number, StepRecommendation>();
 			const stepIds: number[] = [];
@@ -358,15 +359,19 @@ export class PersistenceLayer {
 				}
 			}
 
-			// Step IDs are validated numeric values prior to placeholder interpolation
-			const stepPlaceholders = stepIds.map(() => '?').join(',');
-			const toolRows = stepPlaceholders
-				? (db.prepare(`
+			const stepIdChunks = this.chunk(stepIds, CHUNK_SIZE);
+			const toolRows: any[] = [];
+
+			for (const chunk of stepIdChunks) {
+				if (chunk.length === 0) continue;
+				const placeholders = chunk.map(() => '?').join(',');
+				const rows = db.prepare(`
 					SELECT * FROM tool_recommendations
-					WHERE step_id IN (${stepPlaceholders})
+					WHERE step_id IN (${placeholders})
 					ORDER BY step_id ASC, priority ASC, id ASC
-				`).all(...stepIds) as any[])
-				: [];
+				`).all(...chunk) as any[];
+				toolRows.push(...rows);
+			}
 
 			for (const row of toolRows) {
 				const step = stepMap.get(row.step_id);
@@ -398,7 +403,21 @@ export class PersistenceLayer {
 			return thoughts;
 		}, 'getThoughtHistory', []);
 
-		return result.data || [];
+		return result.success && result.data ? result.data : [];
+	}
+
+	private chunk<T>(array: T[], size: number): T[][] {
+		const chunks: T[][] = [];
+		for (let i = 0; i < array.length; i += size) {
+			chunks.push(array.slice(i, i + size));
+		}
+		return chunks;
+	}
+
+	private extractValidIds(values: Iterable<unknown>): number[] {
+		return Array.from(values)
+			.map(value => Number(value))
+			.filter(value => Number.isFinite(value));
 	}
 
 	async clearHistory(sessionId?: string): Promise<void> {

@@ -79,6 +79,22 @@ pnpm start
 }
 ```
 
+### Google Antigravity
+
+```json
+{
+ "mcpServers": {
+  "mcp-sequentialthinking-tools": {
+   "command": "node",
+   "args": ["/home/dscv/Repositories/mcp-sequentialthinking-tools/dist/index.js"],
+   "env": {
+    "MAX_HISTORY_SIZE": "1000"
+   }
+  }
+ }
+}
+```
+
 ## Tool Contract: `sequentialthinking_tools`
 
 Single MCP tool that returns recommendations only. Minimal request:

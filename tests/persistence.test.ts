@@ -203,6 +203,42 @@ describe('PersistenceLayer.getThoughtHistory', () => {
 		assert.deepStrictEqual(history[0].available_mcp_tools, []);
 		assert.ok(errors.some(msg => msg.includes('Failed to parse JSON field during rehydration')));
 	});
+
+	it('handles large history exceeding SQLite variable limits via chunking', async () => {
+		const { persistence, cleanup } = setupPersistence();
+		const sessionId = 'session-large';
+		const COUNT = 1100; // > 999 default limit
+
+		// Insert thoughts directly for speed
+		const thoughts: ThoughtData[] = [];
+		for (let i = 1; i <= COUNT; i++) {
+			thoughts.push(baseThought({
+				thought: `thought ${i}`,
+				thought_number: i,
+				total_thoughts: COUNT,
+				current_step: {
+					step_description: `step ${i}`,
+					expected_outcome: 'outcome',
+					recommended_tools: [],
+				},
+			}));
+		}
+
+		// Save sequentially (might be slow but robust for test) or batch insert if possible. 
+		// Since saveThought is transactional per thought, we loop.
+		for (const t of thoughts) {
+			await persistence.saveThought(t, sessionId);
+		}
+
+		const history = await persistence.getThoughtHistory(sessionId);
+		assert.strictEqual(history.length, COUNT);
+		assert.strictEqual(history[0].thought, 'thought 1');
+		assert.strictEqual(history[COUNT - 1].thought, `thought ${COUNT}`);
+		assert.strictEqual(history[0].current_step?.step_description, 'step 1');
+		assert.strictEqual(history[COUNT - 1].current_step?.step_description, `step ${COUNT}`);
+
+		cleanup();
+	});
 });
 
 describe('PersistenceLayer.clearHistory', () => {
@@ -234,32 +270,32 @@ describe('PersistenceLayer.clearHistory', () => {
 
 		const db = new Database(dbPath);
 
-		const thoughtCountA = db.prepare('SELECT COUNT(*) as count FROM thoughts WHERE session_id = ?').get(sessionA).count as number;
-		const thoughtCountB = db.prepare('SELECT COUNT(*) as count FROM thoughts WHERE session_id = ?').get(sessionB).count as number;
+		const thoughtCountA = (db.prepare('SELECT COUNT(*) as count FROM thoughts WHERE session_id = ?').get(sessionA) as any).count as number;
+		const thoughtCountB = (db.prepare('SELECT COUNT(*) as count FROM thoughts WHERE session_id = ?').get(sessionB) as any).count as number;
 
-		const stepCountA = db.prepare(`
+		const stepCountA = (db.prepare(`
 			SELECT COUNT(*) as count FROM step_recommendations 
 			WHERE thought_id IN (SELECT id FROM thoughts WHERE session_id = ?)
-		`).get(sessionA).count as number;
-		const stepCountB = db.prepare(`
+		`).get(sessionA) as any).count as number;
+		const stepCountB = (db.prepare(`
 			SELECT COUNT(*) as count FROM step_recommendations 
 			WHERE thought_id IN (SELECT id FROM thoughts WHERE session_id = ?)
-		`).get(sessionB).count as number;
+		`).get(sessionB) as any).count as number;
 
-		const toolCountA = db.prepare(`
+		const toolCountA = (db.prepare(`
 			SELECT COUNT(*) as count FROM tool_recommendations 
 			WHERE step_id IN (
 				SELECT id FROM step_recommendations 
 				WHERE thought_id IN (SELECT id FROM thoughts WHERE session_id = ?)
 			)
-		`).get(sessionA).count as number;
-		const toolCountB = db.prepare(`
+		`).get(sessionA) as any).count as number;
+		const toolCountB = (db.prepare(`
 			SELECT COUNT(*) as count FROM tool_recommendations 
 			WHERE step_id IN (
 				SELECT id FROM step_recommendations 
 				WHERE thought_id IN (SELECT id FROM thoughts WHERE session_id = ?)
 			)
-		`).get(sessionB).count as number;
+		`).get(sessionB) as any).count as number;
 
 		db.close();
 		cleanup();
@@ -298,9 +334,9 @@ describe('PersistenceLayer.clearHistory', () => {
 		close();
 
 		const db = new Database(dbPath);
-		const thoughts = db.prepare('SELECT COUNT(*) as count FROM thoughts').get().count as number;
-		const steps = db.prepare('SELECT COUNT(*) as count FROM step_recommendations').get().count as number;
-		const tools = db.prepare('SELECT COUNT(*) as count FROM tool_recommendations').get().count as number;
+		const thoughts = (db.prepare('SELECT COUNT(*) as count FROM thoughts').get() as any).count as number;
+		const steps = (db.prepare('SELECT COUNT(*) as count FROM step_recommendations').get() as any).count as number;
+		const tools = (db.prepare('SELECT COUNT(*) as count FROM tool_recommendations').get() as any).count as number;
 		db.close();
 		cleanup();
 
