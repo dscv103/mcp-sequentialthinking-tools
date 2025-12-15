@@ -241,7 +241,7 @@ export class PersistenceLayer {
 				return defaultValue;
 			}
 			return (parsed ?? defaultValue) as T;
-		} catch (error) {
+		} catch (_error) {
 			logger.warn('Failed to parse JSON field during rehydration', context);
 			return defaultValue;
 		}

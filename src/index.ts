@@ -135,13 +135,13 @@ class ToolAwareSequentialThinkingServer {
 			halfOpenSuccessThreshold: 1,
 			name: 'dag',
 		});
-		
+
 		// Initialize persistence layer
 		this.persistence = new PersistenceLayer({
 			enablePersistence: runtimeConfig.enablePersistence,
 			dbPath: runtimeConfig.dbPath,
 		});
-		
+
 		// Initialize backtracking manager
 		this.backtrackingManager = new BacktrackingManager({
 			...this.scoringConfig.backtracking,
@@ -156,10 +156,10 @@ class ToolAwareSequentialThinkingServer {
 			progressThreshold: this.scoringConfig.backtracking.progressThreshold,
 			decliningConfidenceThreshold: this.scoringConfig.backtracking.decliningConfidenceThreshold,
 		});
-		
+
 		// Initialize DAG for parallel execution
 		this.thoughtDAG = new ThoughtDAG();
-		
+
 		// Initialize tool chain library
 		this.toolChainLibrary = new ToolChainLibrary(this.scoringConfig.toolChains);
 
@@ -176,8 +176,8 @@ class ToolAwareSequentialThinkingServer {
 			persistenceBreaker: this.persistenceBreaker,
 			dagBreaker: this.dagBreaker,
 		});
-		
-		logger.info('Server initialized', { 
+
+		logger.info('Server initialized', {
 			maxHistorySize: this.maxHistorySize,
 			sessionId: this.sessionId,
 			persistenceEnabled: runtimeConfig.enablePersistence,
@@ -185,7 +185,7 @@ class ToolAwareSequentialThinkingServer {
 			dagEnabled: this.enableDAG,
 			toolChainsEnabled: this.enableToolChains,
 		});
-		
+
 		// Always include the sequential thinking tool
 		if (options.available_tools && !options.availableTools) {
 			logger.warn('The "available_tools" option is deprecated. Use "availableTools" instead.');
@@ -199,7 +199,7 @@ class ToolAwareSequentialThinkingServer {
 		// Initialize with provided tools
 		tools.forEach((tool) => {
 			if (this.availableTools.has(tool.name)) {
-				logger.warn('Duplicate tool name detected', { 
+				logger.warn('Duplicate tool name detected', {
 					toolName: tool.name,
 					message: 'Using first occurrence'
 				});
@@ -210,11 +210,11 @@ class ToolAwareSequentialThinkingServer {
 
 		// Enrich tools with capability metadata
 		enrichToolsWithCapabilities(this.availableTools);
-		
+
 		// Initialize tool matcher
 		this.toolMatcher = new ToolCapabilityMatcher(this.availableTools);
 
-		logger.info('Tools initialized', { 
+		logger.info('Tools initialized', {
 			toolCount: this.availableTools.size,
 			tools: Array.from(this.availableTools.keys()),
 			categories: this.toolMatcher.getCategories(),
@@ -234,13 +234,13 @@ class ToolAwareSequentialThinkingServer {
 			return;
 		}
 		this.availableTools.set(tool.name, tool);
-		
+
 		// Enrich with capabilities if not present
 		enrichToolsWithCapabilities(this.availableTools);
-		
+
 		// Recreate matcher with updated tools
 		this.toolMatcher = new ToolCapabilityMatcher(this.availableTools);
-		
+
 		logger.info('Tool added', { toolName: tool.name });
 	}
 
@@ -275,32 +275,31 @@ class ToolAwareSequentialThinkingServer {
 						thoughtNumber: input.thought_number,
 						branchId: input.branch_id,
 					});
-					
-					logger.error('Failed to process thought', error, { 
+
+					const errorPayload = {
+						error: errorContext.error,
+						errorType: errorContext.errorType,
+						errorCategory: errorContext.category,
+						status: 'failed' as const,
+						context: errorContext,
+					};
+
+					logger.error('Failed to process thought', error, {
 						operation: errorContext.operation,
 						timestamp: errorContext.timestamp,
 						errorType: errorContext.errorType,
 						thoughtNumber: errorContext.thoughtNumber,
 						branchId: errorContext.branchId,
 					});
-					
+
 					return {
 						content: [
 							{
 								type: 'text' as const,
-								text: JSON.stringify(
-									{
-										error: errorContext.error,
-										errorType: errorContext.errorType,
-										errorCategory: errorContext.category,
-										status: 'failed',
-										context: errorContext,
-									},
-									null,
-									2,
-								),
+								text: JSON.stringify(errorPayload, null, 2),
 							},
 						],
+						structuredContent: errorPayload,
 						isError: true,
 					};
 				}
@@ -344,10 +343,12 @@ const thinkingServer = new ToolAwareSequentialThinkingServer({
 server.tool(
 	{
 		name: 'sequentialthinking_tools',
+		title: 'Sequential Thinking Tool Recommender',
 		description: SEQUENTIAL_THINKING_TOOL.description,
 		schema: SequentialThinkingSchema,
+		outputSchema: v.looseObject({}),
 	},
-	async (input) => {
+	async (input: v.InferInput<typeof SequentialThinkingSchema>) => {
 		return thinkingServer.processThought(input);
 	},
 );
@@ -356,7 +357,7 @@ async function main() {
 	const transport = new StdioTransport(server);
 	transport.listen();
 	logger.info('Sequential Thinking MCP Server running on stdio');
-	
+
 	// Log metrics periodically (every 5 minutes)
 	const metricsInterval = setInterval(() => {
 		logger.logMetrics();

@@ -164,26 +164,26 @@ ${formattedContent}
 				reason: backtrackDecision.reason,
 				backtrackTo: backtrackDecision.backtrackTo,
 			});
+
+			const backtrackPayload = {
+				thought_number: thought.thought_number,
+				total_thoughts: thought.total_thoughts,
+				confidence: thought.confidence,
+				backtracking_suggested: true,
+				backtrack_reason: backtrackDecision.reason,
+				backtrack_to_thought: backtrackDecision.backtrackTo,
+				message:
+					'Low confidence detected. Consider revising approach from earlier thought.',
+			};
 			
 			return {
 				content: [
 					{
 						type: 'text' as const,
-						text: JSON.stringify(
-							{
-								thought_number: thought.thought_number,
-								total_thoughts: thought.total_thoughts,
-								confidence: thought.confidence,
-								backtracking_suggested: true,
-								backtrack_reason: backtrackDecision.reason,
-								backtrack_to_thought: backtrackDecision.backtrackTo,
-								message: 'Low confidence detected. Consider revising approach from earlier thought.',
-							},
-							null,
-							2,
-						),
+						text: JSON.stringify(backtrackPayload, null, 2),
 					},
 				],
+				structuredContent: backtrackPayload,
 			};
 		}
 
@@ -355,32 +355,30 @@ ${formattedContent}
 		const toolChainSuggestions = this.suggestNextTools(validatedInput);
 		this.finalizeToolChain(validatedInput);
 
+		const payload = {
+			thought_number: validatedInput.thought_number,
+			total_thoughts: validatedInput.total_thoughts,
+			next_thought_needed: validatedInput.next_thought_needed,
+			confidence: validatedInput.confidence,
+			confidence_stats: confidenceStats,
+			branches: Object.keys(this.branches),
+			thought_history_length: this.thoughtHistory.length,
+			available_mcp_tools: validatedInput.available_mcp_tools,
+			current_step: validatedInput.current_step,
+			previous_steps: validatedInput.previous_steps,
+			remaining_steps: validatedInput.remaining_steps,
+			tool_chain_suggestions: toolChainSuggestions,
+			dag_stats: dagStats,
+		};
+
 		return {
 			content: [
 				{
 					type: 'text' as const,
-					text: JSON.stringify(
-						{
-							thought_number: validatedInput.thought_number,
-							total_thoughts: validatedInput.total_thoughts,
-							next_thought_needed:
-								validatedInput.next_thought_needed,
-							confidence: validatedInput.confidence,
-							confidence_stats: confidenceStats,
-							branches: Object.keys(this.branches),
-							thought_history_length: this.thoughtHistory.length,
-							available_mcp_tools: validatedInput.available_mcp_tools,
-							current_step: validatedInput.current_step,
-							previous_steps: validatedInput.previous_steps,
-							remaining_steps: validatedInput.remaining_steps,
-							tool_chain_suggestions: toolChainSuggestions,
-							dag_stats: dagStats,
-						},
-						null,
-						2,
-					),
+					text: JSON.stringify(payload, null, 2),
 				},
 			],
+			structuredContent: payload,
 		};
 	}
 }

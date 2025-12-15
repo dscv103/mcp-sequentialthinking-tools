@@ -36,7 +36,7 @@ export class ToolChainLibrary {
 	/**
 	 * Record a tool being used in sequence
 	 */
-	recordToolUse(toolName: string, context?: string): void {
+	recordToolUse(toolName: string, _context?: string): void {
 		this.currentChain.push(toolName);
 		logger.debug('Tool use recorded', { 
 			toolName, 

@@ -1,430 +1,165 @@
-# mcp-sequentialthinking-tools
+# MCP Sequential Thinking Tools
 
-An adaptation of the
-[MCP Sequential Thinking Server](https://github.com/modelcontextprotocol/servers/blob/main/src/sequentialthinking/index.ts)
-designed to guide tool usage in problem-solving. This server helps
-break down complex problems into manageable steps and provides
-recommendations for which MCP tools would be most effective at each
-stage.
+A Model Context Protocol (MCP) server that recommends tools for step-by-step reasoning. It tracks thoughts, scores confidence, suggests backtracking when quality drops, and learns tool-chain patterns. The server never executes tools itself; it only recommends them with structured output so your MCP client can run the tools.
 
 <a href="https://glama.ai/mcp/servers/zl990kfusy">
-  <img width="380" height="200" src="https://glama.ai/mcp/servers/zl990kfusy/badge" />
+ <img width="380" height="200" src="https://glama.ai/mcp/servers/zl990kfusy/badge" />
 </a>
 
-A Model Context Protocol (MCP) server that combines sequential
-thinking with intelligent tool suggestions. For each step in the
-problem-solving process, it provides confidence-scored recommendations
-for which tools to use, along with rationale for why each tool would
-be appropriate.
+## What It Does
 
-## Features
+- Produces ranked MCP tool recommendations with rationale and suggested inputs
+- Tracks branches, revisions, and progress with confidence scoring
+- Suggests backtracking when confidence falls below thresholds
+- Builds a DAG of thoughts to reason about ordering/parallelism
+- Learns successful tool sequences and suggests the next likely tool
+- Persists thoughts to SQLite (optional) and trims in-memory history
+- Guards persistence/DAG with circuit breakers and structured error contexts
 
-- 🤔 Dynamic and reflective problem-solving through sequential
-  thoughts
-- 🔄 Flexible thinking process that adapts and evolves
-- 🌳 Support for branching and revision of thoughts
-- 🛠️ LLM-driven intelligent tool recommendations for each step
-- 📊 Confidence scoring for tool suggestions and reasoning quality
-- 🔍 Detailed rationale for tool recommendations
-- 📝 Step tracking with expected outcomes
-- 🔄 Progress monitoring with previous and remaining steps
-- 🎯 Alternative tool suggestions for each step
-- 🧠 Memory management with configurable history limits
-- 🗑️ Manual history cleanup capabilities
-- 💾 **SQLite persistence** for long-running tasks
-- ⚡ **Retry logic** with exponential backoff for reliability
-- 📋 **Structured logging** with performance metrics
-- 🎯 **Tool capability metadata** for intelligent matching
-- 🔙 **Automatic backtracking** on low confidence paths
-- 🔀 **DAG-based execution** for parallel workflows
-- 🔗 **Tool chain learning** from successful patterns
+## Why It Works (Algorithms)
 
-## How It Works
+- **Confidence scoring**: combines tool confidence, revisions, branching, and progress to rate each thought.
+- **Backtracking**: proposes a prior thought to revisit when confidence dips below `MIN_CONFIDENCE`.
+- **DAG reasoning**: auto-adds dependencies (previous thought, branch source, or revision target) to enable parallel-ready planning.
+- **Tool-chain learning**: records successful sequences, scores by success rate and recency, and suggests next tools.
+- **Capability matching**: infers categories/tags from tool descriptions to improve ranking.
+- **Persistence + breakers**: SQLite storage with circuit breakers so transient DB/DAG faults do not crash sessions.
 
-This server facilitates sequential thinking with MCP tool coordination. The LLM analyzes available tools and their descriptions to make intelligent recommendations, which are then tracked and organized by this server.
+## Quick Start (runtime)
 
-The workflow:
-1. LLM provides available MCP tools to the sequential thinking server
-2. LLM analyzes each thought step and recommends appropriate tools
-3. Server tracks recommendations, maintains context, and manages memory
-4. LLM executes recommended tools and continues the thinking process
-
-Each recommendation includes:
-- A confidence score (0-1) indicating how well the tool matches the need
-- A clear rationale explaining why the tool would be helpful
-- A priority level to suggest tool execution order
-- Suggested input parameters for the tool
-- Alternative tools that could also be used
-
-The server works with any MCP tools available in your environment and automatically manages memory to prevent unbounded growth.
-
-## Example Usage
-
-Here's an example of how the server guides tool usage:
-
-```json
-{
-	"thought": "Initial research step to understand what universal reactivity means in Svelte 5",
-	"current_step": {
-		"step_description": "Gather initial information about Svelte 5's universal reactivity",
-		"expected_outcome": "Clear understanding of universal reactivity concept",
-		"recommended_tools": [
-			{
-				"tool_name": "search_docs",
-				"confidence": 0.9,
-				"rationale": "Search Svelte documentation for official information",
-				"priority": 1
-			},
-			{
-				"tool_name": "tavily_search",
-				"confidence": 0.8,
-				"rationale": "Get additional context from reliable sources",
-				"priority": 2
-			}
-		],
-		"next_step_conditions": [
-			"Verify information accuracy",
-			"Look for implementation details"
-		]
-	},
-	"thought_number": 1,
-	"total_thoughts": 5,
-	"next_thought_needed": true
-}
-```
-
-The server tracks your progress and supports:
-
-- Creating branches to explore different approaches
-- Revising previous thoughts with new information
-- Maintaining context across multiple steps
-- Suggesting next steps based on current findings
-
-## Configuration
-
-This server requires configuration through your MCP client. Here are
-examples for different environments:
-
-### Cline Configuration
-
-Add this to your Cline MCP settings:
-
-```json
-{
-	"mcpServers": {
-		"mcp-sequentialthinking-tools": {
-			"command": "npx",
-			"args": ["-y", "mcp-sequentialthinking-tools"],
-			"env": {
-				"MAX_HISTORY_SIZE": "1000"
-			}
-		}
-	}
-}
-```
-
-### Claude Desktop with WSL Configuration
-
-For WSL environments, add this to your Claude Desktop configuration:
-
-```json
-{
-	"mcpServers": {
-		"mcp-sequentialthinking-tools": {
-			"command": "wsl.exe",
-			"args": [
-				"bash",
-				"-c",
-				"MAX_HISTORY_SIZE=1000 source ~/.nvm/nvm.sh && /home/username/.nvm/versions/node/v20.12.1/bin/npx mcp-sequentialthinking-tools"
-			]
-		}
-	}
-}
-```
-
-## API
-
-The server implements a single MCP tool with configurable parameters:
-
-### sequentialthinking_tools
-
-A tool for dynamic and reflective problem-solving through thoughts,
-with intelligent tool recommendations.
-
-Parameters:
-
-- `available_mcp_tools` (array, required): Array of MCP tool names available for use (e.g., ["mcp-omnisearch", "mcp-turso-cloud"])
-- `thought` (string, required): Your current thinking step
-- `next_thought_needed` (boolean, required): Whether another thought
-  step is needed
-- `thought_number` (integer, required): Current thought number
-- `total_thoughts` (integer, required): Estimated total thoughts
-  needed
-- `is_revision` (boolean, optional): Whether this revises previous
-  thinking
-- `revises_thought` (integer, optional): Which thought is being
-  reconsidered
-- `branch_from_thought` (integer, optional): Branching point thought
-  number
-- `branch_id` (string, optional): Branch identifier
-- `needs_more_thoughts` (boolean, optional): If more thoughts are
-  needed
-- `current_step` (object, optional): Current step recommendation with:
-  - `step_description`: What needs to be done
-  - `recommended_tools`: Array of tool recommendations with confidence
-    scores
-  - `expected_outcome`: What to expect from this step
-  - `next_step_conditions`: Conditions for next step
-- `previous_steps` (array, optional): Steps already recommended
-- `remaining_steps` (array, optional): High-level descriptions of
-  upcoming steps
-- `confidence` (number, optional): Confidence score (0-1) for current thought path
-
-## Advanced Features
-
-### Error Handling & Retry Logic
-
-The server includes comprehensive error handling with automatic retry for transient failures:
-
-- **Exponential Backoff**: Automatically retries failed operations with increasing delays
-- **Structured Error Context**: Provides detailed error information for debugging
-- **Retryable Error Detection**: Identifies network errors, timeouts, and rate limits
-- **Error Recovery**: Prevents cascading failures and maintains reasoning progress
-
-### Structured Logging & Telemetry
-
-Production-ready logging with performance tracking:
-
-- **JSON Structured Logs**: Enable with `STRUCTURED_LOGS=true`
-- **Performance Metrics**: Automatic tracking of operation durations
-- **Log Levels**: Configure with `LOG_LEVEL` (debug, info, warn, error)
-- **Multiple Outputs**: Set `LOG_FORMATS=json,pretty` to emit both structured and human-readable logs
-- **Metrics Export**: Periodic summaries include operation timing and log-level counts
-
-### Circuit Breakers & Categorized Errors
-
-- **Circuit breaker** protection around persistence and DAG updates prevents cascading failures
-- **Categorized error contexts** surface whether failures are validation, persistence, configuration, DAG, or circuit-related
-- **Retry logic** remains available for transient issues, complementing the breaker guardrails
-
-### Configuration Validation
-
-- Defaults live in `src/config-constants.ts` and are sanitized through `ConfigurationManager`
-- All scoring inputs are clamped to valid ranges (0–1 for confidence values, positive integers for limits)
-- Environment overrides are validated before use to keep runtime behavior predictable
-
-### Architecture Overview
-
-```
-┌─────────────────┐     ┌──────────────────┐
-│ Configuration   │     │ Logging & Metrics│
-│ Manager         │────▶│ (multi-format)   │
-└──────┬──────────┘     └────────┬─────────┘
-       │                         │
-       ▼                         ▼
-┌───────────────┐      ┌──────────────────┐
-│ ThoughtProcessor│◀──▶│ Backtracking/DAG │
-└──────┬────────┘      └────────┬────────┘
-       │                         │
-       ▼                         ▼
-┌──────────────┐       ┌──────────────────┐
-│ Persistence  │◀─────▶│ Circuit Breakers │
-└──────────────┘       └──────────────────┘
-```
-
-### Testing
-
-Run the focused test suite (backtracking, DAG, and circuit breaker coverage):
+1) Install Node.js 20+.
+2) Run directly:
 
 ```bash
-npm test
-```
-- **Metric Reporting**: Periodic performance summaries
-
-### State Persistence with SQLite
-
-Long-running tasks survive server restarts:
-
-- **Persistent Storage**: All thoughts, steps, and recommendations saved to SQLite
-- **Session Management**: Thoughts grouped by session for easy tracking
-- **Database Schema**: Optimized indexes for fast queries
-- **Optional Disable**: Set `ENABLE_PERSISTENCE=false` to disable
-
-### Tool Capability Metadata System
-
-Intelligent tool matching through structured capabilities:
-
-- **Auto-Enrichment**: Automatically infers capabilities from tool descriptions
-- **Category Tags**: Tools organized by category (data, search, analysis, etc.)
-- **Capability Matching**: Score-based matching of tools to requirements
-- **Similar Tool Discovery**: Find alternative tools with similar capabilities
-
-### Backtracking with Confidence Scoring
-
-Prevents low-quality reasoning paths:
-
-- **Automatic Confidence**: Calculates confidence based on multiple factors
-- **Backtracking Suggestions**: Recommends revision when confidence is low
-- **Confidence Tracking**: Statistical analysis of reasoning quality
-- **Manual Override**: Optionally provide confidence scores
-
-### DAG-Based Task Execution
-
-Enables parallel execution of independent thoughts:
-
-- **Dependency Tracking**: Automatically builds dependency graph
-- **Parallel Groups**: Identifies thoughts that can execute in parallel
-- **Topological Sort**: Determines optimal execution order
-- **Status Management**: Tracks pending, executing, completed, and failed thoughts
-
-### Tool Chain Pattern Library
-
-Learns from successful tool sequences:
-
-- **Pattern Recording**: Tracks successful tool chains
-- **Next Tool Suggestions**: Recommends tools based on historical patterns
-- **Context Matching**: Matches chains by keywords and context
-- **Success Rate Tracking**: Prioritizes proven patterns
-
-## Configuration
-
-### Environment Variables
-
-All features can be configured via environment variables:
-
-```bash
-# History management
-MAX_HISTORY_SIZE=1000              # Maximum thoughts to retain (default: 1000)
-
-# Persistence
-ENABLE_PERSISTENCE=true            # Enable SQLite persistence (default: true)
-DB_PATH=./mcp-thinking.db          # Database file path (default: ./mcp-thinking.db)
-
-# Logging
-LOG_LEVEL=info                     # Log level: debug, info, warn, error (default: info)
-STRUCTURED_LOGS=false              # Enable JSON structured logs (default: false)
-
-# Backtracking
-ENABLE_BACKTRACKING=false          # Enable automatic backtracking (default: false)
-MIN_CONFIDENCE=0.3                 # Minimum confidence threshold (default: 0.3)
-
-# DAG execution
-ENABLE_DAG=false                   # Enable DAG-based execution (default: false)
-
-# Tool chains
-ENABLE_TOOL_CHAINS=true            # Enable tool chain learning (default: true)
+npx -y mcp-sequentialthinking-tools
 ```
 
-### Example Configuration
+3) Configure your MCP client (examples below) to point at the binary and set env vars.
 
-```json
-{
-  "mcpServers": {
-    "mcp-sequentialthinking-tools": {
-      "command": "npx",
-      "args": ["-y", "mcp-sequentialthinking-tools"],
-      "env": {
-        "MAX_HISTORY_SIZE": "2000",
-        "ENABLE_PERSISTENCE": "true",
-        "ENABLE_BACKTRACKING": "true",
-        "MIN_CONFIDENCE": "0.4",
-        "ENABLE_DAG": "true",
-        "LOG_LEVEL": "debug",
-        "STRUCTURED_LOGS": "true"
-      }
-    }
-  }
-}
-```
-
-## Memory Management
-
-The server includes built-in memory management to prevent unbounded growth:
-
-- **History Limit**: Configurable maximum number of thoughts to retain (default: 1000)
-- **Automatic Trimming**: History automatically trims when limit is exceeded
-- **Manual Cleanup**: Server provides methods to clear history when needed
-- **Persistent Backup**: Cleared items remain in SQLite database
-
-### Configuring History Size
-
-You can configure the history size by setting the `MAX_HISTORY_SIZE` environment variable:
-
-```json
-{
-  "mcpServers": {
-    "mcp-sequentialthinking-tools": {
-      "command": "npx",
-      "args": ["-y", "mcp-sequentialthinking-tools"],
-      "env": {
-        "MAX_HISTORY_SIZE": "500"
-      }
-    }
-  }
-}
-```
-
-Or for local development:
-```bash
-MAX_HISTORY_SIZE=2000 npx mcp-sequentialthinking-tools
-```
-
-## Development
-
-### Setup
-
-1. Clone the repository
-2. Install dependencies:
+For development from source:
 
 ```bash
 pnpm install
-```
-
-3. Build the project:
-
-```bash
 pnpm build
+pnpm start
 ```
 
-4. Run in development mode:
+## MCP Client Configuration Examples
 
-```bash
-pnpm dev
+### Cline
+
+```json
+{
+ "mcpServers": {
+  "mcp-sequentialthinking-tools": {
+   "command": "npx",
+   "args": ["-y", "mcp-sequentialthinking-tools"],
+   "env": {
+    "MAX_HISTORY_SIZE": "1000"
+   }
+  }
+ }
+}
 ```
 
-### Publishing
+### Claude Desktop (WSL)
 
-The project uses changesets for version management. To publish:
-
-1. Create a changeset:
-
-```bash
-pnpm changeset
+```json
+{
+ "mcpServers": {
+  "mcp-sequentialthinking-tools": {
+   "command": "wsl.exe",
+   "args": [
+    "bash",
+    "-c",
+    "MAX_HISTORY_SIZE=1000 source ~/.nvm/nvm.sh && /home/username/.nvm/versions/node/v20.12.1/bin/npx mcp-sequentialthinking-tools"
+   ]
+  }
+ }
+}
 ```
 
-2. Version the package:
+## Tool Contract: `sequentialthinking_tools`
 
-```bash
-pnpm changeset version
+Single MCP tool that returns recommendations only. Minimal request:
+
+```json
+{
+ "available_mcp_tools": ["mcp-omnisearch", "mcp-turso-cloud"],
+ "thought": "Understand Svelte 5 universal reactivity",
+ "thought_number": 1,
+ "total_thoughts": 5,
+ "next_thought_needed": true
+}
 ```
 
-3. Publish to npm:
+Response always includes `content` and `structuredContent`. Example (truncated):
 
-```bash
-pnpm release
+```json
+{
+ "structuredContent": {
+  "thought_number": 1,
+  "confidence": 0.78,
+  "current_step": {
+   "step_description": "Gather initial docs",
+   "recommended_tools": [
+    {"tool_name": "search_docs", "priority": 1, "confidence": 0.9},
+    {"tool_name": "tavily_search", "priority": 2, "confidence": 0.8}
+   ]
+  },
+  "dag_stats": {"total": 1, "completed": 1}
+ }
+}
 ```
 
-## Contributing
+## MCP Patterns Mapped to Sequential Thinking
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+- **Backtracking**: confidence-aware `shouldBacktrack` gate with suggested `backtrack_to_thought` in responses.
+- **DAG/parallelism**: thoughts become nodes; revisions/branches add edges; stats include parallel group counts.
+- **Tool-chain suggestions**: learned sequences surface `tool_chain_suggestions` for the next tool candidates.
+- **Capability matching**: inferred categories/tags enrich ranking and provide alternates.
+- **Structured outputs**: every response returns JSON in both `content` and `structuredContent` for clients.
+- **Execution contract**: server recommends only—clients execute tools.
+
+## Components (map to source)
+
+- Server wiring and MCP registration: [src/index.ts](src/index.ts)
+- Schemas and types: [src/schema.ts](src/schema.ts), [src/types.ts](src/types.ts)
+- Thought processing pipeline: [src/thought-processor.ts](src/thought-processor.ts)
+- Backtracking/confidence: [src/backtracking.ts](src/backtracking.ts)
+- DAG management: [src/dag.ts](src/dag.ts)
+- Tool-chain learning: [src/tool-chains.ts](src/tool-chains.ts)
+- Capability enrichment/matching: [src/tool-capabilities.ts](src/tool-capabilities.ts)
+- Persistence (SQLite) with circuit breaker guards: [src/persistence.ts](src/persistence.ts)
+- Config loading/validation and defaults: [src/config-manager.ts](src/config-manager.ts), [src/config-constants.ts](src/config-constants.ts), [src/config.ts](src/config.ts)
+- Logging/metrics and error handling: [src/logging.ts](src/logging.ts), [src/error-handling.ts](src/error-handling.ts)
+
+## Configuration (env vars)
+
+- History: `MAX_HISTORY_SIZE` (default 1000)
+- Persistence: `ENABLE_PERSISTENCE` (true), `DB_PATH` (./mcp-thinking.db)
+- Backtracking: `ENABLE_BACKTRACKING` (false), `MIN_CONFIDENCE` (0.3)
+- DAG: `ENABLE_DAG` (false)
+- Tool chains: `ENABLE_TOOL_CHAINS` (true)
+- Logging: `LOG_LEVEL` (info), `STRUCTURED_LOGS` (false), `LOG_FORMATS` (json,pretty)
+
+## Performance and Reliability Notes
+
+- Persistence is optional; when disabled, the circuit breaker prevents DB calls.
+- DAG updates are breaker-guarded to avoid cascading failures.
+- History trimming keeps memory bounded; persistence retains full history per session.
+- Capability inference runs once per tool; formatting uses a small cache (bounded to avoid memory bloat).
+- SQLite tables are indexed for thought/step lookups.
+
+## Development
+
+- Install deps: `pnpm install`
+- Build: `pnpm build`
+- Run with inspector: `pnpm dev` (uses @modelcontextprotocol/inspector against built output)
+- Start built server: `pnpm start`
+- Tests (focused suite): `pnpm test`
 
 ## License
 
-MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Built on the
-  [Model Context Protocol](https://github.com/modelcontextprotocol)
-- Adapted from the
-  [MCP Sequential Thinking Server](https://github.com/modelcontextprotocol/servers/blob/main/src/sequentialthinking/index.ts)
+MIT License. See [LICENSE](LICENSE).
+The server implements a single MCP tool with configurable parameters:

@@ -388,7 +388,7 @@ use rmcp::model::Parameters;
 use serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
 
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
 pub struct ExampleParams {
     pub input: String,
 }
