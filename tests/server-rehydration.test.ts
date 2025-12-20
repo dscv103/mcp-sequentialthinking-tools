@@ -35,7 +35,8 @@ describe('Server State Rehydration', () => {
             thought: 'Thought 1',
             thought_number: 1,
             total_thoughts: 3,
-            next_thought_needed: true
+            next_thought_needed: true,
+            available_mcp_tools: []
         } as ThoughtData);
 
         // T2 (depends on T1)
@@ -43,7 +44,8 @@ describe('Server State Rehydration', () => {
             thought: 'Thought 2',
             thought_number: 2,
             total_thoughts: 3,
-            next_thought_needed: true
+            next_thought_needed: true,
+            available_mcp_tools: []
         } as ThoughtData);
 
         // T3 (Branch from T1)
@@ -53,7 +55,8 @@ describe('Server State Rehydration', () => {
             total_thoughts: 3,
             branch_from_thought: 1,
             branch_id: 'branch-1',
-            next_thought_needed: false
+            next_thought_needed: false,
+            available_mcp_tools: []
         } as ThoughtData);
 
         // Shutdown Server A
